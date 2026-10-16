@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../../src/FluxEncoder.Infrastructure/FluxEncoder.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>

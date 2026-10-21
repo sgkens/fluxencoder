@@ -26,21 +26,31 @@ public static class OutputPathPlanner
     {
         ArgumentNullException.ThrowIfNull(job);
         ArgumentNullException.ThrowIfNull(input);
+
+        return Resolve(job.OutputPath, job.Policy, [input.Source], (long)((input.Media.SizeBytes ?? 0) * copiedFraction), context);
+    }
+
+    /// <param name="inputs">Every input of the job; the output may be none of them.</param>
+    /// <param name="estimatedBytes">Expected output size, for the low-space warning; 0 when unknown.</param>
+    public static Decision Resolve(string outputPath, JobPolicy policy, IReadOnlyList<InputSource> inputs, long estimatedBytes, PlanningContext context)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
+        ArgumentNullException.ThrowIfNull(policy);
+        ArgumentNullException.ThrowIfNull(inputs);
         ArgumentNullException.ThrowIfNull(context);
-        ArgumentNullException.ThrowIfNull(profile);
 
         var fs = context.FileSystem;
         var warnings = new List<JobWarning>();
 
-        if (InputSource.Classify(job.OutputPath).Kind != InputKind.LocalFile)
+        if (InputSource.Classify(outputPath).Kind != InputKind.LocalFile)
         {
-            return Fail(FailureCategory.InvalidUsage, $"Output '{job.OutputPath}' is not a file path; streaming and pipe outputs are not supported yet.");
+            return Fail(FailureCategory.InvalidUsage, $"Output '{outputPath}' is not a file path; streaming and pipe outputs are not supported yet.");
         }
 
-        var requested = fs.GetFullPath(job.OutputPath);
-        if (IsInput(requested, input, fs))
+        var requested = fs.GetFullPath(outputPath);
+        if (IsInput(requested, inputs, fs))
         {
-            return Fail(FailureCategory.OutputIsInput, $"The output '{job.OutputPath}' is the input file. Choose a different output name.");
+            return Fail(FailureCategory.OutputIsInput, $"The output '{outputPath}' is an input file. Choose a different output name.");
         }
 
         var directory = Path.GetDirectoryName(requested) ?? requested;
@@ -56,12 +66,12 @@ public static class OutputPathPlanner
         }
 
         bool Reserved(string path) => context.ReservedOutputs.Contains(path);
-        bool Taken(string path) => Reserved(path) || fs.FileExists(path) || IsInput(path, input, fs);
+        bool Taken(string path) => Reserved(path) || fs.FileExists(path) || IsInput(path, inputs, fs);
 
         var final = requested;
         if (Taken(requested))
         {
-            switch (job.Policy.Overwrite)
+            switch (policy.Overwrite)
             {
                 case OverwritePolicy.Skip when !Reserved(requested):
                     return new Decision(requested, $"'{requested}' already exists.", null, warnings);
@@ -89,12 +99,11 @@ public static class OutputPathPlanner
                 return Fail(FailureCategory.InsufficientSpace, $"Only {Megabytes(free)} MB free on the output volume.");
             }
 
-            var estimate = (long)((input.Media.SizeBytes ?? 0) * copiedFraction);
-            if (estimate > free)
+            if (estimatedBytes > free)
             {
                 warnings.Add(new JobWarning(
                     WarningCodes.LowDiskSpace,
-                    $"About {Megabytes(estimate)} MB may be needed but only {Megabytes(free)} MB is free."));
+                    $"About {Megabytes(estimatedBytes)} MB may be needed but only {Megabytes(free)} MB is free."));
             }
         }
 
@@ -103,8 +112,8 @@ public static class OutputPathPlanner
         Decision Fail(FailureCategory category, string message) => new(null, null, new JobFailure(category, message), warnings);
     }
 
-    private static bool IsInput(string fullOutput, PlanningInput input, IPlanningFileSystem fs) =>
-        input.Source.LocalPath is { } inputPath && fs.IsSameFile(fs.GetFullPath(inputPath), fullOutput);
+    private static bool IsInput(string fullOutput, IReadOnlyList<InputSource> inputs, IPlanningFileSystem fs) =>
+        inputs.Any(input => input.LocalPath is { } inputPath && fs.IsSameFile(fs.GetFullPath(inputPath), fullOutput));
 
     private static string? NearestExistingDirectory(string directory, IPlanningFileSystem fs, out string? blockedBy)
     {

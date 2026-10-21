@@ -154,7 +154,8 @@ public static class EncodeExecutor
     }
 
     /// <summary>
-    /// Creates the output directory (the planner allows missing ones) and the scratch directory for pass logs.
+    /// Creates the output directory (the planner allows missing ones) and the scratch directory, and writes the
+    /// plan's prepared files.
     /// </summary>
     private static JobFailure? PrepareDirectories(OutputPlan plan)
     {
@@ -170,6 +171,11 @@ public static class EncodeExecutor
             if (plan.ScratchDirectory is { } scratch)
             {
                 Directory.CreateDirectory(scratch);
+            }
+
+            foreach (var (path, content) in plan.PreparedFiles)
+            {
+                File.WriteAllText(path, content, new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
             }
 
             return null;

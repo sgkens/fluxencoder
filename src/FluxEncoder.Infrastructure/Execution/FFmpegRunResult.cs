@@ -23,7 +23,16 @@ public sealed record FFmpegRunResult(
     /// <summary>
     /// FFmpeg honoured a stop request and finalized its output. For an unbounded input this is a normal finish.
     /// </summary>
-    public bool StoppedCleanly => Termination == RunTermination.Stopped && !Killed && ExitCode == 0;
+    /// <remarks>
+    /// Exit code 255 counts as clean: Ctrl+C in a terminal also delivers SIGINT to FFmpeg, which finalizes the output
+    /// and then exits with 255 rather than 0.
+    /// </remarks>
+    public bool StoppedCleanly => Termination == RunTermination.Stopped && !Killed && ExitCode is 0 or SignalExitCode;
+
+    /// <summary>
+    /// FFmpeg's exit code after finishing because of SIGINT or SIGTERM.
+    /// </summary>
+    public const int SignalExitCode = 255;
 
     /// <summary>
     /// The classified failure, or <see langword="null"/> when FFmpeg succeeded.

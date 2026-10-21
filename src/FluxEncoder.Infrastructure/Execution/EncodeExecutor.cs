@@ -225,9 +225,13 @@ public static class EncodeExecutor
         }
     }
 
+    /// <summary>
+    /// Removes what an earlier attempt left behind. Runs before the output directory exists on a first attempt, where
+    /// <see cref="File.Delete"/> would throw rather than do nothing.
+    /// </summary>
     private static void DeleteTemporary(OutputPlan plan, List<JobWarning> warnings)
     {
-        if (plan.TemporaryOutputPath is { } temporary)
+        if (plan.TemporaryOutputPath is { } temporary && File.Exists(temporary))
         {
             TryCleanup(() => File.Delete(temporary), temporary, warnings);
         }

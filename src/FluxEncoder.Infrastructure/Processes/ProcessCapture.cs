@@ -53,8 +53,8 @@ public static class ProcessCapture
         // Close stdin so a tool that unexpectedly waits for input sees EOF instead of hanging.
         process.StandardInput.Close();
 
-        var stdoutTask = ReadHeadAsync(process.StandardOutput, maxOutputChars);
-        var stderrTask = ReadTailAsync(process.StandardError, maxErrorChars);
+        var stdoutTask = StreamDrain.ReadHeadAsync(process.StandardOutput, maxOutputChars);
+        var stderrTask = StreamDrain.ReadTailAsync(process.StandardError, maxErrorChars);
 
         using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeoutSource.CancelAfter(timeout);
@@ -90,50 +90,5 @@ public static class ProcessCapture
         {
             // Already exited.
         }
-    }
-
-    private static async Task<(string Text, bool Truncated)> ReadHeadAsync(StreamReader reader, int maxChars)
-    {
-        var builder = new StringBuilder();
-        var buffer = new char[8192];
-        var truncated = false;
-        int read;
-
-        while ((read = await reader.ReadAsync(buffer).ConfigureAwait(false)) > 0)
-        {
-            var room = maxChars - builder.Length;
-            if (room > 0)
-            {
-                builder.Append(buffer, 0, Math.Min(read, room));
-            }
-
-            // Keep draining past the limit so the process never blocks on a full pipe.
-            truncated |= read > room;
-        }
-
-        return (builder.ToString(), truncated);
-    }
-
-    private static async Task<string> ReadTailAsync(StreamReader reader, int maxChars)
-    {
-        var builder = new StringBuilder();
-        var buffer = new char[8192];
-        int read;
-
-        while ((read = await reader.ReadAsync(buffer).ConfigureAwait(false)) > 0)
-        {
-            builder.Append(buffer, 0, read);
-            if (builder.Length > maxChars * 2)
-            {
-                builder.Remove(0, builder.Length - maxChars);
-            }
-        }
-
-        if (builder.Length > maxChars)
-        {
-            builder.Remove(0, builder.Length - maxChars);
-        }
-
-        return builder.ToString();
     }
 }

@@ -26,6 +26,12 @@ public enum FailureCategory
 
     DependencyMissing,
     Unsupported,
+
+    /// <summary>
+    /// A hardware encoder or decoder is compiled in but its device or driver is not usable. Automatic hardware
+    /// selection may fall back to the CPU on this category (TSKE006.3).
+    /// </summary>
+    HardwareUnavailable,
     EncodeFailed,
     OutputValidationFailed,
 

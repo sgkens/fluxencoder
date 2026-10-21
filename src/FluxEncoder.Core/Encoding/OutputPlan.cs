@@ -36,8 +36,39 @@ public sealed record OutputPlan
 
     public ImmutableArray<FFmpegInvocation> Invocations { get; }
 
+    /// <summary>
+    /// Where the result ends up. Equals <see cref="EncodingJob.OutputPath"/> unless
+    /// <see cref="OverwritePolicy.Rename"/> chose a numbered sibling.
+    /// </summary>
+    public string FinalOutputPath
+    {
+        get => field ?? Job.OutputPath;
+        init
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(value);
+            field = value;
+        }
+    }
+
+    /// <summary>
+    /// The file FFmpeg writes (<see cref="OutputPaths.Temporary"/>), moved to <see cref="FinalOutputPath"/> only
+    /// after it validates. <see langword="null"/> when FFmpeg writes straight to the destination, as for network
+    /// streams and pipes, where there is nothing to move.
+    /// </summary>
+    public string? TemporaryOutputPath { get; init; }
+
+    /// <summary>
+    /// A directory for pass logs and other per-job scratch files, deleted when the job ends whatever its outcome.
+    /// </summary>
+    public string? ScratchDirectory { get; init; }
+
     public bool Equals(OutputPlan? other) =>
-        other is not null && Job == other.Job && Invocations.SequenceEqual(other.Invocations);
+        other is not null
+        && Job == other.Job
+        && Invocations.SequenceEqual(other.Invocations)
+        && FinalOutputPath == other.FinalOutputPath
+        && TemporaryOutputPath == other.TemporaryOutputPath
+        && ScratchDirectory == other.ScratchDirectory;
 
     public override int GetHashCode()
     {

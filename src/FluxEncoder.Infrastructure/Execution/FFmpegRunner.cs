@@ -71,7 +71,7 @@ public static class FFmpegRunner
             return new JobFailure(FailureCategory.DependencyMissing, $"FFmpeg at '{ffmpegPath}' could not be started.") { Detail = ex.Message };
         }
 
-        var monitor = new ProgressMonitor(progress);
+        var monitor = new ProgressMonitor(progress, new ProcessSampler(process));
         var stdoutTask = ReadProgressAsync(process.StandardOutput, monitor);
         var stderrTask = StreamDrain.ReadTailAsync(process.StandardError, options.MaxErrorChars);
 
@@ -178,7 +178,7 @@ public static class FFmpegRunner
     /// Tracks the latest report and when output last advanced. A report that repeats the previous frame count,
     /// time, and size is not an advance, which is what makes a hung input detectable.
     /// </summary>
-    private sealed class ProgressMonitor(IProgress<EncodeProgress>? sink)
+    private sealed class ProgressMonitor(IProgress<EncodeProgress>? sink, ProcessSampler sampler)
     {
         private readonly Stopwatch _sinceAdvance = Stopwatch.StartNew();
         private EncodeProgress? _last;
@@ -198,8 +198,46 @@ public static class FFmpegRunner
                 _sinceAdvance.Restart();
             }
 
+            var (cpu, memory) = sampler.Sample();
+            report = report with { CpuPercent = cpu, MemoryBytes = memory };
+
             Volatile.Write(ref _last, report);
             sink?.Report(report);
+        }
+    }
+
+    /// <summary>
+    /// Measures FFmpeg's CPU share and memory at each progress report (TSKE009.8). CPU is the process's processor-time
+    /// delta divided by the wall-clock delta and the logical core count, so 100 means every core was busy.
+    /// </summary>
+    private sealed class ProcessSampler(Process process)
+    {
+        private readonly Stopwatch _wall = Stopwatch.StartNew();
+        private TimeSpan _lastCpu;
+        private TimeSpan _lastWall;
+
+        public (double? CpuPercent, long? MemoryBytes) Sample()
+        {
+            try
+            {
+                process.Refresh();
+                var cpu = process.TotalProcessorTime;
+                var wall = _wall.Elapsed;
+                var wallDelta = (wall - _lastWall).TotalSeconds;
+
+                double? percent = wallDelta > 0.05 && _lastWall > TimeSpan.Zero
+                    ? Math.Clamp((cpu - _lastCpu).TotalSeconds / wallDelta / Environment.ProcessorCount * 100, 0, 100)
+                    : null;
+
+                _lastCpu = cpu;
+                _lastWall = wall;
+                return (percent, process.WorkingSet64);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
+            {
+                // The process exited between reports, or the platform does not expose the counters.
+                return (null, null);
+            }
         }
     }
 }

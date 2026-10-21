@@ -69,7 +69,7 @@ public sealed record ContainerProfile
 
     private static readonly FrozenSet<string> TextSubtitles = Set("subrip", "srt", "ass", "ssa", "webvtt", "mov_text", "text");
 
-    private static readonly FrozenSet<string> Mp4Video = Set("h264", "hevc", "av1", "vp9", "mpeg4", "mpeg2video");
+    private static readonly FrozenSet<string> Mp4Video = Set("h264", "hevc", "av1", "vvc", "vp9", "mpeg4", "mpeg2video");
 
     private static readonly FrozenSet<string> Mp4Audio = Set("aac", "ac3", "eac3", "opus", "flac", "mp3", "alac");
 

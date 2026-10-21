@@ -76,7 +76,18 @@ public static class StreamFitter
                         var options = new List<KeyValuePair<string, string>>(encode.TargetBitRateKbps is { } kbps
                             ? [.. context.Hardware.GetBitRateOptions(encode.Codec, encode.Quality), new("b", Kilobits(kbps))]
                             : context.Hardware.GetQualityOptions(encode.Codec, encode.Quality));
-                        options.AddRange(VideoEncodeOptions.For(video, encode.Codec, encoder, warnings));
+                        options.AddRange(VideoEncodeOptions.For(video, encode.Codec, encoder, context.Hardware, warnings));
+
+                        if (context.Capabilities.Encoders.TryGetValue(encoder, out var implementation) && implementation.IsExperimental)
+                        {
+                            options.Add(new("strict", "experimental"));
+                        }
+
+                        if (encode.Codec == VideoCodec.Vvc && !warnings.Any(w => w.Code == WarningCodes.VvcExperimental))
+                        {
+                            warnings.Add(new JobWarning(WarningCodes.VvcExperimental, "VVC (H.266) encoding is experimental and few players can decode it yet."));
+                        }
+
                         options.AddRange(ClearStatistics(video));
                         Add(mapped, 'v', encoder, options, motion: true);
                     }
@@ -208,6 +219,7 @@ public static class StreamFitter
         VideoCodec.H264 => "h264",
         VideoCodec.Hevc => "hevc",
         VideoCodec.Av1 => "av1",
+        VideoCodec.Vvc => "vvc",
         _ => throw new ArgumentOutOfRangeException(nameof(codec), codec, null),
     };
 
@@ -278,6 +290,7 @@ public static class StreamFitter
         VideoCodec.H264 => "H.264",
         VideoCodec.Hevc => "HEVC",
         VideoCodec.Av1 => "AV1",
+        VideoCodec.Vvc => "VVC",
         _ => codec.ToString(),
     };
 }

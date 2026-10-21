@@ -1,5 +1,6 @@
 using System.Globalization;
 using FluxEncoder.Core.Encoding;
+using FluxEncoder.Core.Hardware;
 using FluxEncoder.Core.Media;
 using FluxEncoder.Core.Results;
 
@@ -10,8 +11,9 @@ namespace FluxEncoder.Core.Planning;
 /// </summary>
 /// <remarks>
 /// <list type="bullet">
-/// <item>Bit depth: HEVC and AV1 keep 10-bit sources (and anything HDR) at 10-bit; H.264 is written 8-bit for
-/// playback compatibility, with a warning when that reduces depth. Chroma is written 4:2:0 for the same reason.</item>
+/// <item>Bit depth: HEVC, AV1, and VVC keep 10-bit sources (and anything HDR) at 10-bit when the encoder and device
+/// can; H.264 is written 8-bit for playback compatibility. Reductions are warned about. Chroma is written 4:2:0.
+/// Pixel formats come from the strategy (CPU encoders take yuv420p/yuv420p10le, GPUs nv12/p010le).</item>
 /// <item>Colour range, primaries, transfer, and matrix are passed explicitly when known, because encoders do not
 /// all copy them from the decoded frames.</item>
 /// <item>HDR10 mastering display and content light level are written into libx265's SEI. Dolby Vision and HDR10+
@@ -26,9 +28,10 @@ namespace FluxEncoder.Core.Planning;
 public static class VideoEncodeOptions
 {
     public static IReadOnlyList<KeyValuePair<string, string>> For(
-        VideoStream source, VideoCodec codec, string encoder, ICollection<JobWarning> warnings)
+        VideoStream source, VideoCodec codec, string encoder, IHardwareStrategy strategy, ICollection<JobWarning> warnings)
     {
         ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(strategy);
         ArgumentNullException.ThrowIfNull(warnings);
 
         var options = new List<KeyValuePair<string, string>>();
@@ -37,7 +40,6 @@ public static class VideoEncodeOptions
 
         if (codec == VideoCodec.H264)
         {
-            options.Add(new("pix_fmt", "yuv420p"));
             if (hdr != HdrFormat.None)
             {
                 warnings.Add(new JobWarning(WarningCodes.HdrInH264, $"Stream {source.Index} is HDR; 8-bit H.264 will band and few players handle HDR H.264. Use HEVC or AV1 to keep HDR."));
@@ -46,10 +48,27 @@ public static class VideoEncodeOptions
             {
                 warnings.Add(new JobWarning(WarningCodes.BitDepthReduced, $"Stream {source.Index} is {source.BitDepth}-bit; H.264 output is 8-bit."));
             }
+
+            options.Add(new("pix_fmt", strategy.GetPixelFormat(codec, highBitDepth: false)!));
         }
         else
         {
-            options.Add(new("pix_fmt", deep || hdr != HdrFormat.None ? "yuv420p10le" : "yuv420p"));
+            var wantsHigh = deep || hdr != HdrFormat.None;
+            var format = strategy.GetPixelFormat(codec, wantsHigh);
+
+            if (format is null)
+            {
+                format = strategy.GetPixelFormat(codec, highBitDepth: false)!;
+                warnings.Add(hdr != HdrFormat.None
+                    ? new JobWarning(WarningCodes.HdrNotPreserved, $"{strategy.DisplayName} cannot encode 10-bit on this machine; HDR stream {source.Index} is written 8-bit and will band. Use --hardware cpu to keep HDR.")
+                    : new JobWarning(WarningCodes.BitDepthReduced, $"{strategy.DisplayName} cannot encode 10-bit on this machine; stream {source.Index} is written 8-bit."));
+            }
+            else if (hdr.HasFlag(HdrFormat.Hdr10) && strategy.Vendor != HardwareVendor.Cpu)
+            {
+                warnings.Add(new JobWarning(WarningCodes.HardwareHdrMetadata, $"{strategy.DisplayName} may not write HDR10 mastering metadata for stream {source.Index}; --hardware cpu guarantees it."));
+            }
+
+            options.Add(new("pix_fmt", format));
         }
 
         AddIfKnown(options, "color_range", source.Color.Range);

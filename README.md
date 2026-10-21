@@ -69,8 +69,8 @@ These capabilities are represented in the concept files, but should not yet be t
 
 ### Encoding and media operations
 
-- CPU encoding with H.264, HEVC, AV1, and experimental VVC mappings.
-- NVIDIA NVENC, AMD AMF, Intel Quick Sync, Apple VideoToolbox, and software strategies.
+- CPU encoding with H.264, HEVC, and AV1; VVC (H.266) only when the FFmpeg build includes libvvenc, and marked experimental.
+- NVIDIA NVENC, AMD AMF, Intel Quick Sync, Apple VideoToolbox, and software strategies, each used only after a test encode confirms the device works.
 - Stream copy when re-encoding is unnecessary.
 - Multiple inputs and advanced FFmpeg arguments.
 - Video scaling, cropping, frame-rate changes, and audio normalization.

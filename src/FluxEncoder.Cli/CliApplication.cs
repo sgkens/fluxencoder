@@ -31,6 +31,7 @@ public static class CliApplication
             HistoryCommand.Build(host),
             RemoteCommand.Build(host),
             ApplyCommand.Build(host, session),
+            InfoCommand.Build(host),
         };
 
         return root;

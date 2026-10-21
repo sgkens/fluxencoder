@@ -37,7 +37,10 @@ internal static class ApplyCommand
 
     private const string VariablePrefix = "FLUX_";
 
-    private static readonly ImmutableDictionary<string, string> Refused = new Dictionary<string, string>
+    /// <summary>
+    /// Encode options a Fluxfile may not set, with the reason shown to the user.
+    /// </summary>
+    internal static readonly ImmutableDictionary<string, string> Refused = new Dictionary<string, string>
     {
         ["ffmpeg-arg"] = "raw FFmpeg arguments can read or write any file. Use 'encode --ffmpeg-arg' for one-off runs.",
         ["ffmpeg"] = "a Fluxfile cannot choose which program runs. Pass --ffmpeg to apply.",
@@ -131,6 +134,15 @@ internal static class ApplyCommand
         return command;
     }
 
+    /// <summary>
+    /// The encode options a Fluxfile job may set, by name without dashes. <c>docs/schema/fluxfile-v1.schema.json</c>
+    /// lists the same set; a test keeps the two in step.
+    /// </summary>
+    internal static ImmutableDictionary<string, FluxOptionKind> ManifestOptions(Command encode) =>
+        encode.Options
+            .Where(o => o.Name.StartsWith("--", StringComparison.Ordinal) && !Refused.ContainsKey(o.Name[2..]))
+            .ToImmutableDictionary(o => o.Name[2..], o => o.ValueType == typeof(bool) ? FluxOptionKind.Flag : FluxOptionKind.Value, StringComparer.Ordinal);
+
     private static KeyValuePair<string, string>? SplitVariable(string text)
     {
         var equals = text.IndexOf('=', StringComparison.Ordinal);
@@ -177,11 +189,7 @@ internal static class ApplyCommand
             var (fluxfile, errors) = FluxfileLoader.Load(new FluxfileReadOptions
             {
                 Path = path,
-                EncodeOptions = _encode.Command.Options
-                    .Where(o => o.Name.StartsWith("--", StringComparison.Ordinal))
-                    .ToDictionary(o => o.Name[2..], o => o.ValueType == typeof(bool) ? FluxOptionKind.Flag : FluxOptionKind.Value, StringComparer.Ordinal)
-                    .Where(o => !Refused.ContainsKey(o.Key))
-                    .ToImmutableDictionary(StringComparer.Ordinal),
+                EncodeOptions = ManifestOptions(_encode.Command),
                 RefusedOptions = Refused,
                 Variables = Variable,
                 AllowOutputsOutside = options.AllowOutside,

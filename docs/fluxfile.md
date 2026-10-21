@@ -143,7 +143,7 @@ A job skips outputs that already exist, so `flux apply` after an interruption do
 
 ### Failures
 
-A failed job stops only the jobs that need it; the others still run unless `--fail-fast`. Exit codes follow `encode`: `0` when everything succeeded or was skipped, `10` when some jobs failed and others succeeded, the failure's own code when all failed, and `2` for any problem in the Fluxfile itself.
+A failed job stops only the jobs that need it; the others still run unless `--fail-fast`. Exit codes follow `encode`: `0` when everything succeeded or was skipped, `10` when some jobs failed and others succeeded or were skipped, the shared code when every job failed for the same kind of reason (otherwise `1`), `130` when interrupted, and `2` for any problem in the Fluxfile itself.
 
 ### Dry runs
 

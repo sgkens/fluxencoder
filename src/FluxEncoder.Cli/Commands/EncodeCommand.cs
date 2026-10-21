@@ -8,10 +8,6 @@ using FluxEncoder.Core.Encoding;
 using FluxEncoder.Core.Hardware;
 using FluxEncoder.Core.Planning;
 using FluxEncoder.Core.Results;
-using FluxEncoder.Core.Security;
-using FluxEncoder.Infrastructure.Execution;
-using FluxEncoder.Infrastructure.History;
-using FluxEncoder.Infrastructure.Secrets;
 
 namespace FluxEncoder.Cli.Commands;
 
@@ -107,6 +103,11 @@ internal sealed class EncodeCommand
 
     public readonly Option<bool> NoMetadata = new("--no-metadata") { Description = "Drop container tags such as title (stream languages are kept)." };
 
+    public readonly Option<bool> KeepPrivateMetadata = new("--keep-private-metadata")
+    {
+        Description = "Keep location (GPS) and recording-device tags, which are removed by default.",
+    };
+
     public readonly Option<bool> NoCover = new("--no-cover") { Description = "Drop cover art." };
 
     public readonly Option<bool> NoAttachments = new("--no-attachments") { Description = "Drop attachments such as subtitle fonts." };
@@ -188,6 +189,15 @@ internal sealed class EncodeCommand
         return new EncodeCommand().Create(host, session);
     }
 
+    /// <summary>
+    /// The command together with its option definitions, for <c>apply</c>, which parses each Fluxfile job through it.
+    /// </summary>
+    internal static (EncodeCommand Definition, Command Command) Define(CliHost host, CliSession session)
+    {
+        var definition = new EncodeCommand();
+        return (definition, definition.Create(host, session));
+    }
+
     private Command Create(CliHost host, CliSession session)
     {
         Codec.AcceptOnlyFromAmong(Codecs);
@@ -208,7 +218,7 @@ internal sealed class EncodeCommand
         var command = new Command(Name, "Convert media files with FFmpeg: re-encode or copy video, choose tracks, trim, and batch.")
         {
             Inputs, Output, Format, Codec, Quality, VideoBitRate, TwoPass, AudioCodec, AudioBitRate,
-            Video, Audio, Subtitles, NoChapters, NoMetadata, NoCover, NoAttachments, KeepData,
+            Video, Audio, Subtitles, NoChapters, NoMetadata, KeepPrivateMetadata, NoCover, NoAttachments, KeepData,
             Start, End, Duration, HardwareOption, HardwareFallback,
             Overwrite, SkipExisting, RenameExisting, KeepPartial, Retries, FailFast,
             DryRun, Json, Quiet, Verbose, NoColor, Preset, NoConfig, FFmpegArgs, FFmpeg, FFprobe,
@@ -299,100 +309,40 @@ internal sealed class EncodeCommand
             reporter.Notice(notice);
         }
 
-        var (inputs, emptyDirectories) = InputExpander.Expand(parse.GetValue(Inputs) ?? []);
-        if (emptyDirectories.Count > 0 && inputs.Count == 0)
+        var (jobs, usage) = CreateJobs(parse);
+        if (usage is not null)
         {
-            return Fatal(FailureCategory.InvalidUsage, $"No media files found in {string.Join(", ", emptyDirectories.Select(d => $"'{d}'"))}.");
+            reporter.Fatal(usage);
+            return (int)usage.ExitCode;
         }
 
-        var output = parse.GetValue(Output);
-        var several = inputs.Count > 1;
-        if (several && output is not null && !OutputNamer.IsDirectoryLike(output) && ContainerProfile.ForPath(output) is not null)
+        var run = await EncodeRun.StartAsync(host, session, reporter, parse.GetValue(FFmpeg), parse.GetValue(FFprobe), dryRun, cancellationToken).ConfigureAwait(false);
+        if (!run.IsSuccess)
         {
-            return Fatal(FailureCategory.InvalidUsage, $"With {inputs.Count} inputs, --output must be a directory, not the file '{output}'.");
+            reporter.Fatal(run.Failure);
+            return (int)run.Failure.ExitCode;
         }
 
-        var tools = await ToolSession.CreateAsync(parse.GetValue(FFmpeg), parse.GetValue(FFprobe), cancellationToken).ConfigureAwait(false);
-        if (!tools.IsSuccess)
-        {
-            reporter.Fatal(tools.Failure);
-            return (int)tools.Failure.ExitCode;
-        }
-
-        var history = dryRun
-            ? null
-            : await RunHistory.OpenAsync(host, session.Settings.History, reporter, cancellationToken).ConfigureAwait(false);
-
-        var reserved = new HashSet<string>(OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
-        var managed = host.GetVariable(ManagedVariable) is "1" or "true";
-        var policy = managed ? session.Settings.Security with { AllowExtraArguments = false } : session.Settings.Security;
-        var limits = session.Settings.Limits;
-        var environment = tools.Value with
-        {
-            ReservedOutputs = reserved,
-            Policy = policy,
-            Limits = limits,
-            RunOptions = tools.Value.RunOptions with { MaxRunTime = limits.MaxRunTime },
-        };
         var reports = new List<JobReport>();
         var notStarted = 0;
         var failFast = parse.GetValue(FailFast);
 
-        for (var i = 0; i < inputs.Count; i++)
+        for (var i = 0; i < jobs.Count; i++)
         {
             if (cancellationToken.IsCancellationRequested)
             {
-                notStarted = inputs.Count - i;
+                notStarted = jobs.Count - i;
                 break;
             }
 
-            var input = inputs[i];
-            var video = VideoTarget(parse);
-            var job = BuildJob(parse, input, OutputNamer.Resolve(input, output, parse.GetValue(Format), video, several), video);
-
-            if (RemoteMount.SplitRemoteInput(input) is { } remote)
-            {
-                var (resolved, remoteFailure) = await ResolveRemoteAsync(remote.Alias, remote.Path, host, session, cancellationToken).ConfigureAwait(false);
-                if (remoteFailure is not null)
-                {
-                    var failed = new JobReport(input, job, JobResult.Failed(job.OutputPath, remoteFailure), null, null);
-                    reports.Add(failed);
-                    reporter.Completed(failed, dryRun, environment.FFmpegPath);
-                    if (failFast)
-                    {
-                        notStarted = inputs.Count - i - 1;
-                        break;
-                    }
-
-                    continue;
-                }
-
-                job = job with { InputPath = resolved! };
-            }
-
-            var started = DateTimeOffset.UtcNow;
-            var telemetry = history is { RecordsTelemetry: true } ? new TelemetryRecorder() : null;
-            var report = dryRun
-                ? await PlanAsync(input, job, environment, cancellationToken).ConfigureAwait(false)
-                : await reporter.RunJobAsync(i, inputs.Count, input, progress => EncodeAsync(input, job, environment, Tee(progress, telemetry), cancellationToken)).ConfigureAwait(false);
-
-            if (history is not null)
-            {
-                await history.RecordAsync(report, started, telemetry?.Samples ?? [], environment.FFmpegPath, cancellationToken).ConfigureAwait(false);
-            }
-
-            if (report.Planned is { IsSkipped: false, Plan: { } plan })
-            {
-                reserved.Add(Path.GetFullPath(plan.FinalOutputPath));
-            }
-
+            var (input, job) = jobs[i];
+            var report = await run.Value.RunAsync(i, jobs.Count, input, input, job, cancellationToken).ConfigureAwait(false);
             reports.Add(report);
-            reporter.Completed(report, dryRun, environment.FFmpegPath);
 
             var failure = report.Result.Failure;
             if (failure is { Category: FailureCategory.Cancelled } || (failure is not null && failFast))
             {
-                notStarted = inputs.Count - i - 1;
+                notStarted = jobs.Count - i - 1;
                 break;
             }
         }
@@ -400,81 +350,38 @@ internal sealed class EncodeCommand
         var batch = new BatchResult(reports.Select(r => r.Result)) { NotStarted = notStarted };
         reporter.Finished(reports, batch, dryRun);
         return (int)batch.ExitCode;
-
-        int Fatal(FailureCategory category, string message)
-        {
-            var failure = new JobFailure(category, message);
-            reporter.Fatal(failure);
-            return (int)failure.ExitCode;
-        }
     }
 
     /// <summary>
-    /// Turns <c>remote://ALIAS/path</c> into the real URL, with the password from the environment or the OS credential
-    /// store (TSKE010.3). The password is registered for redaction before the URL exists, so it is masked in every
-    /// message, JSON document, and history row. Users and paths are percent-encoded by <see cref="RemoteMount.ToUrl"/>.
+    /// Expands the inputs (directories become their media files) and builds one job per input from the parsed options.
+    /// Shared with <c>apply</c>, which parses each Fluxfile job through this command so both accept exactly the same
+    /// options with the same validation.
     /// </summary>
-    private static async Task<(string? Url, JobFailure? Failure)> ResolveRemoteAsync(string alias, string path, CliHost host, CliSession session, CancellationToken cancellationToken)
+    internal (IReadOnlyList<(string Input, EncodingJob Job)> Jobs, JobFailure? Failure) CreateJobs(ParseResult parse)
     {
-        if (!session.Settings.Remotes.TryGetValue(alias, out var mount))
+        ArgumentNullException.ThrowIfNull(parse);
+
+        var (inputs, emptyDirectories) = InputExpander.Expand(parse.GetValue(Inputs) ?? []);
+        if (emptyDirectories.Count > 0 && inputs.Count == 0)
         {
-            return (null, new JobFailure(FailureCategory.InvalidUsage, $"There is no remote '{alias}'. Add it with: remote add {alias} URL --password-stdin"));
+            return ([], new JobFailure(FailureCategory.InvalidUsage, $"No media files found in {string.Join(", ", emptyDirectories.Select(d => $"'{d}'"))}."));
         }
 
-        string? password;
-        try
+        var output = parse.GetValue(Output);
+        var several = inputs.Count > 1;
+        if (several && output is not null && !OutputNamer.IsDirectoryLike(output) && ContainerProfile.ForPath(output) is not null)
         {
-            password = await SecretStores.ReadAsync(SecretStores.RemoteKey(mount.Alias), host.GetVariable, host.SecretStore(), cancellationToken).ConfigureAwait(false);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return (null, new JobFailure(FailureCategory.DependencyMissing, $"The password for remote '{alias}' could not be read: {ex.Message}"));
+            return ([], new JobFailure(FailureCategory.InvalidUsage, $"With {inputs.Count} inputs, --output must be a directory, not the file '{output}'."));
         }
 
-        Redaction.Register(password);
-
-        try
+        var jobs = new List<(string, EncodingJob)>(inputs.Count);
+        foreach (var input in inputs)
         {
-            return (mount.ToUrl(path, password), null);
-        }
-        catch (ArgumentException ex)
-        {
-            return (null, new JobFailure(FailureCategory.InvalidUsage, $"remote://{alias}/{path}: {ex.Message}"));
-        }
-    }
-
-    private static IProgress<JobProgress> Tee(IProgress<JobProgress> first, IProgress<JobProgress>? second) =>
-        second is null ? first : new TeeProgress(first, second);
-
-    private sealed class TeeProgress(IProgress<JobProgress> first, IProgress<JobProgress> second) : IProgress<JobProgress>
-    {
-        public void Report(JobProgress value)
-        {
-            first.Report(value);
-            second.Report(value);
-        }
-    }
-
-    private static async Task<JobReport> EncodeAsync(string input, EncodingJob job, EncodeEnvironment environment, IProgress<JobProgress> progress, CancellationToken cancellationToken)
-    {
-        var outcome = await EncodeOrchestrator.RunAsync(job, environment, progress, cancellationToken).ConfigureAwait(false);
-        return new JobReport(input, job, outcome.Result, outcome.Planned, outcome.Strategy);
-    }
-
-    private static async Task<JobReport> PlanAsync(string input, EncodingJob job, EncodeEnvironment environment, CancellationToken cancellationToken)
-    {
-        var (planned, strategy, _, warnings) = await EncodeOrchestrator.PlanAsync(job, environment, cancellationToken).ConfigureAwait(false);
-        if (!planned.IsSuccess)
-        {
-            return new JobReport(input, job, JobResult.Failed(job.OutputPath, planned.Failure, warnings), null, strategy);
+            var video = VideoTarget(parse);
+            jobs.Add((input, BuildJob(parse, input, OutputNamer.Resolve(input, output, parse.GetValue(Format), video, several), video)));
         }
 
-        var plan = planned.Value;
-        var result = plan.IsSkipped
-            ? JobResult.Skipped(plan.OutputPath, plan.SkipReason, [.. warnings, .. plan.Warnings])
-            : JobResult.Succeeded(plan.OutputPath, [.. warnings, .. plan.Warnings]);
-
-        return new JobReport(input, job, result, plan, strategy);
+        return (jobs, null);
     }
 
     private VideoTarget VideoTarget(ParseResult parse)
@@ -531,6 +438,7 @@ internal sealed class EncodeCommand
                 Subtitles = Tracks(parse.GetValue(Subtitles)),
                 Chapters = !parse.GetValue(NoChapters),
                 Metadata = !parse.GetValue(NoMetadata),
+                PrivateMetadata = parse.GetValue(KeepPrivateMetadata),
                 CoverArt = !parse.GetValue(NoCover),
                 Attachments = !parse.GetValue(NoAttachments),
                 DataStreams = parse.GetValue(KeepData),

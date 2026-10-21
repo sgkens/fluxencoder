@@ -30,6 +30,8 @@ public static class CliApplication
             ConfigCommand.Build(host),
             HistoryCommand.Build(host),
             RemoteCommand.Build(host),
+            ApplyCommand.Build(host, session),
+            InfoCommand.Build(host),
         };
 
         return root;

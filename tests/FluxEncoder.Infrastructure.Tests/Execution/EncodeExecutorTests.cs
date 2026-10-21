@@ -77,6 +77,18 @@ public sealed class EncodeExecutorTests : IDisposable
     }
 
     [Fact]
+    public async Task MissingOutputDirectory_IsCreatedWithoutCleanupWarnings()
+    {
+        var final = Path.Combine(_directory, "new", "nested", "out.mkv");
+
+        var result = await EncodeExecutor.ExecuteAsync(FFmpeg, SinglePass(final), TwoSeconds, cancellationToken: Token);
+
+        Assert.Equal(JobOutcome.Succeeded, result.Outcome);
+        Assert.True(File.Exists(final));
+        Assert.Empty(result.Warnings);
+    }
+
+    [Fact]
     public async Task ExistingFinal_IsNotReplacedUnderNever()
     {
         var final = PathOf("taken.mkv");

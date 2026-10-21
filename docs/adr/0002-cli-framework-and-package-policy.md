@@ -32,6 +32,8 @@ Pinned at adoption:
 | System.CommandLine | 2.0.12 | 2026-09-08 |
 | Spectre.Console | 0.57.2 | 2026-07-02 |
 | xunit.v3 | 4.0.1 | 2026-09-12 |
+| Microsoft.Data.Sqlite | 10.0.12 | 2026-09-08 |
+| YamlDotNet | 18.1.0 | 2026-06-26 |
 
 ## Consequences
 

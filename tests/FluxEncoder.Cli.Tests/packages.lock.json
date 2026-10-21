@@ -185,7 +185,8 @@
         "type": "Project",
         "dependencies": {
           "FluxEncoder.Core": "[1.0.0, )",
-          "Microsoft.Data.Sqlite": "[10.0.12, )"
+          "Microsoft.Data.Sqlite": "[10.0.12, )",
+          "YamlDotNet": "[18.1.0, )"
         }
       },
       "Microsoft.Data.Sqlite": {
@@ -213,6 +214,12 @@
         "requested": "[2.0.12, )",
         "resolved": "2.0.12",
         "contentHash": "FpW672e6qqrTd1EfKqsvUtFZaJWlTlszUR1o8tdakXhkzKbnEZVndtpfd4K3fUPCFcIs9UmcswMyYGJP1zp/rg=="
+      },
+      "YamlDotNet": {
+        "type": "CentralTransitive",
+        "requested": "[18.1.0, )",
+        "resolved": "18.1.0",
+        "contentHash": "5K+9KFg2TdTl7VXv88Qzi/0lqK6JFoNP3lRuImPYGRV7K/QYklDyTrj4+A+KAki1JsQi6qKY+hDyY7d6WRqjrw=="
       }
     }
   }

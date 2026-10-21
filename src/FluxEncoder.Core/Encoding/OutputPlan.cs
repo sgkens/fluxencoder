@@ -62,13 +62,21 @@ public sealed record OutputPlan
     /// </summary>
     public string? ScratchDirectory { get; init; }
 
+    /// <summary>
+    /// Files the executor writes before the first invocation, such as a concat list, keyed by full path. Paths lie
+    /// inside <see cref="ScratchDirectory"/> so cleanup removes them.
+    /// </summary>
+    public ImmutableDictionary<string, string> PreparedFiles { get; init; } = ImmutableDictionary<string, string>.Empty;
+
     public bool Equals(OutputPlan? other) =>
         other is not null
         && Job == other.Job
         && Invocations.SequenceEqual(other.Invocations)
         && FinalOutputPath == other.FinalOutputPath
         && TemporaryOutputPath == other.TemporaryOutputPath
-        && ScratchDirectory == other.ScratchDirectory;
+        && ScratchDirectory == other.ScratchDirectory
+        && PreparedFiles.Count == other.PreparedFiles.Count
+        && PreparedFiles.All(file => other.PreparedFiles.TryGetValue(file.Key, out var content) && content == file.Value);
 
     public override int GetHashCode()
     {

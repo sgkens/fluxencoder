@@ -92,7 +92,7 @@ Actual codec availability always depends on the installed FFmpeg build and the h
 ### Inspection, reports, and quality checks
 
 - Media and stream inspection through FFprobe.
-- Export ideas for JSON, YAML, Markdown, HTML, and SVG badges.
+- `info` reports as text, JSON, YAML, Markdown, HTML, or an SVG badge, with values encoded for each format.
 - Silence and black-frame detection.
 - Stored execution history and performance telemetry.
 - Side-by-side comparisons of previous runs.
@@ -100,11 +100,11 @@ Actual codec availability always depends on the installed FFmpeg build and the h
 ### Repeatable automation
 
 - Saved presets.
-- A planned `Fluxfile.yaml` format for version-controlled encoding jobs.
+- `Fluxfile.yaml` manifests for version-controlled encoding jobs, run with `flux apply` (see [docs/fluxfile.md](docs/fluxfile.md)).
 - Batch input expansion.
 - Remote-path aliases such as `remote://archive/path/video.mkv`.
 
-The YAML loader and secure credential storage are currently placeholders. They must be completed before these automation features can be enabled safely.
+Fluxfiles are parsed and validated without running anything they name, and remote passwords live in the operating system's credential store; see [docs/security.md](docs/security.md).
 
 ## Intended command experience
 

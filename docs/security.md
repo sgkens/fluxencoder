@@ -17,6 +17,7 @@ flowchart LR
 
 - **Trusted:** the person running FluxEncoder, their command line, their `settings.json`, and the FFmpeg binary they installed.
 - **Untrusted:** everything inside the media: file and directory names, container metadata, playlists, subtitle text, and FFmpeg's messages about them; and every remote server.
+- **Untrusted:** Fluxfiles. They are often written by someone else or cloned with a repository, so `apply` limits what they can do (see [Fluxfiles](#fluxfiles)).
 - FluxEncoder never invokes a shell. Every FFmpeg argument is passed through `ProcessStartInfo.ArgumentList`.
 
 ## Threats and mitigations
@@ -55,7 +56,30 @@ Telemetry (1,800 samples per run) and captured FFmpeg output (last 64 KB) are al
 
 ### Generated documents
 
-FluxEncoder does not yet write HTML, SVG, Markdown, YAML, or manifests (planned under FMT-E011). When it does, every value from media must be escaped for the target format, YAML must use quoted scalars only, SVG must contain no scripts or external references, and manifests must be parsed without executing or resolving anything they name.
+`info --format` writes reports whose values come from the media:
+
+| Format | Encoding |
+|---|---|
+| HTML | Every value entity-encoded; characters XML forbids replaced; a content security policy forbids scripts and every external resource |
+| SVG badge | Fixed template without scripts, event attributes, links, or external fonts; text entity-encoded |
+| Markdown | Every inline construct backslash-escaped in each table cell; line breaks flattened |
+| YAML | Written by the YamlDotNet emitter with every string double-quoted, so no value can become another type, an anchor, or a tag |
+| JSON | Written by `Utf8JsonWriter`, which escapes control characters |
+
+### Fluxfiles
+
+| Threat | Mitigation |
+|---|---|
+| YAML alias expansion ("billion laughs") or tags that construct objects | Anchors, aliases, and explicit tags are refused; parsing uses YamlDotNet's event parser without object mapping; files over 1 MB or nested over 32 levels are refused |
+| A value such as `--ffmpeg-arg=-y` becoming an option | Values are passed as single `--name=value` tokens and inputs after `--`; the parse result is checked again for refused options |
+| Choosing the FFmpeg executable or passing raw FFmpeg arguments | `ffmpeg`, `ffprobe`, and `ffmpeg-arg` are refused in Fluxfiles |
+| Copying a secret from the environment into a URL | Only `--var` values and `FLUX_*` environment variables are substituted |
+| Overwriting files elsewhere on the machine | Outputs must resolve inside the Fluxfile's folder unless `--allow-outside` |
+| Silently ignored typos, or an empty file reported as success | Unknown keys are errors; a Fluxfile without jobs is an error |
+
+### Metadata privacy
+
+FFmpeg copies every container tag by default, so a converted phone or camera video would carry the recording's GPS position and the device's make, model, serial number, or owner. FluxEncoder removes location and device tags from outputs unless `--keep-private-metadata` is given, and `info` hides them unless `--show-private`. Descriptive tags (title, artist, comment, description, copyright, dates) and stream languages are kept. Data streams, which can carry GPS telemetry, are dropped unless `--keep-data`. Per-stream tags are not filtered; no common recorder writes location there.
 
 ## Raw FFmpeg arguments
 

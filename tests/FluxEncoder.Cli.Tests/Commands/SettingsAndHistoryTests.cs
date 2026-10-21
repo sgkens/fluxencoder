@@ -235,4 +235,35 @@ public sealed class SettingsAndHistoryTests : IAsyncLifetime
         Assert.Equal(0, run.ExitCode);
         Assert.Contains("No runs recorded yet", run.Error, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public async Task CredentialsInInputUrl_NeverReachOutputJsonOrHistory()
+    {
+        SkipWithoutFFmpeg();
+        const string Password = "s3cretPW-91";
+        var url = $"http://alice:{Password}@127.0.0.1:9/live.ts?token=t0ken-77";
+
+        var human = await RunAsync("encode", url, "-o", PathOf("net.mkv"), "--verbose");
+        var json = await RunAsync("encode", url, "-o", PathOf("net2.mkv"), "--json");
+
+        Assert.Equal(3, human.ExitCode);
+        foreach (var text in new[] { human.Out, human.Error, json.Out, json.Error })
+        {
+            Assert.DoesNotContain(Password, text, StringComparison.Ordinal);
+            Assert.DoesNotContain("t0ken-77", text, StringComparison.Ordinal);
+        }
+
+        Assert.Contains("alice:***@127.0.0.1", human.Error, StringComparison.Ordinal);
+
+        SqliteConnection.ClearAllPools();
+        foreach (var file in Directory.GetFiles(Paths.Data))
+        {
+            var bytes = System.Text.Encoding.UTF8.GetString(await File.ReadAllBytesAsync(file, TestContext.Current.CancellationToken));
+            Assert.DoesNotContain(Password, bytes, StringComparison.Ordinal);
+            Assert.DoesNotContain("t0ken-77", bytes, StringComparison.Ordinal);
+        }
+
+        var history = await RunAsync("history", "list", "--json");
+        Assert.Contains("alice:***@", history.Out, StringComparison.Ordinal);
+    }
 }

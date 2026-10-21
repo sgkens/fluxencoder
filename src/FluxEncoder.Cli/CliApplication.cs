@@ -127,8 +127,8 @@ public static class CliApplication
                 await host.Error.WriteAsync("\u001b[?25h").ConfigureAwait(false);
             }
 
-            await host.Error.WriteLineAsync(TerminalText.Clean($"Internal error: {ex.Message}")).ConfigureAwait(false);
-            await host.Error.WriteLineAsync(TerminalText.Clean(ex.ToString())).ConfigureAwait(false);
+            await host.Error.WriteLineAsync(TerminalText.Safe($"Internal error: {ex.Message}")).ConfigureAwait(false);
+            await host.Error.WriteLineAsync(TerminalText.Safe(ex.ToString())).ConfigureAwait(false);
             return (int)ExitCode.GeneralFailure;
         }
     }
@@ -137,7 +137,7 @@ public static class CliApplication
     {
         foreach (var message in messages)
         {
-            await host.Error.WriteLineAsync(TerminalText.Clean(message)).ConfigureAwait(false);
+            await host.Error.WriteLineAsync(TerminalText.Safe(message)).ConfigureAwait(false);
         }
 
         await host.Error.WriteLineAsync("Run with --help for usage.").ConfigureAwait(false);

@@ -1,4 +1,5 @@
 using System.Text;
+using FluxEncoder.Core.Security;
 
 namespace FluxEncoder.Cli.Rendering;
 
@@ -15,6 +16,12 @@ namespace FluxEncoder.Cli.Rendering;
 /// </remarks>
 internal static class TerminalText
 {
+    /// <summary>
+    /// Masks secrets (<see cref="Redaction.Text"/>) and then neutralizes control characters: the form every human-
+    /// readable line takes on its way out.
+    /// </summary>
+    public static string Safe(string? text) => Clean(Redaction.Text(text));
+
     public static string Clean(string? text)
     {
         if (string.IsNullOrEmpty(text) || !text.Any(IsUnsafe))

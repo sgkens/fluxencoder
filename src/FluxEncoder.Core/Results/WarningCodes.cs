@@ -45,4 +45,89 @@ public static class WarningCodes
     /// A temporary file or scratch directory could not be removed.
     /// </summary>
     public const string CleanupFailed = "cleanup-failed";
+
+    /// <summary>
+    /// The output existed, so a numbered name was used (rename policy).
+    /// </summary>
+    public const string OutputRenamed = "output-renamed";
+
+    /// <summary>
+    /// Free space on the output volume may not hold the result.
+    /// </summary>
+    public const string LowDiskSpace = "low-disk-space";
+
+    /// <summary>
+    /// The output container holds audio only, so video was left out.
+    /// </summary>
+    public const string VideoDropped = "video-dropped";
+
+    /// <summary>
+    /// A copied audio stream is not accepted by the container and was re-encoded.
+    /// </summary>
+    public const string AudioTranscoded = "audio-transcoded";
+
+    /// <summary>
+    /// The target audio codec supports fewer channels than the source; audio was downmixed.
+    /// </summary>
+    public const string AudioDownmixed = "audio-downmixed";
+
+    /// <summary>
+    /// Styled (ASS/SSA) subtitles were converted to a plain text format the container accepts.
+    /// </summary>
+    public const string SubtitleStylingLost = "subtitle-styling-lost";
+
+    /// <summary>
+    /// Subtitles the container cannot hold (usually image-based ones) were left out.
+    /// </summary>
+    public const string SubtitleDropped = "subtitle-dropped";
+
+    /// <summary>
+    /// The output container cannot carry the cover art.
+    /// </summary>
+    public const string CoverArtDropped = "cover-art-dropped";
+
+    /// <summary>
+    /// Attachments such as subtitle fonts were left out because the container cannot hold them.
+    /// </summary>
+    public const string AttachmentsDropped = "attachments-dropped";
+
+    /// <summary>
+    /// A data stream (timecode, telemetry) was left out because the container cannot hold it.
+    /// </summary>
+    public const string DataStreamDropped = "data-stream-dropped";
+
+    /// <summary>
+    /// The output container cannot hold chapters.
+    /// </summary>
+    public const string ChaptersDropped = "chapters-dropped";
+
+    /// <summary>
+    /// The trim end is past the end of the input; encoding stops at the input's end.
+    /// </summary>
+    public const string TrimEndBeyondInput = "trim-end-beyond-input";
+
+    /// <summary>
+    /// Video is stream-copied, so the start snaps to the nearest earlier keyframe.
+    /// </summary>
+    public const string TrimKeyframeAligned = "trim-keyframe-aligned";
+
+    /// <summary>
+    /// The source has more than 8 bits per sample; the target encode is 8-bit.
+    /// </summary>
+    public const string BitDepthReduced = "bit-depth-reduced";
+
+    /// <summary>
+    /// HDR in 8-bit H.264 bands visibly and few players handle it; HEVC or AV1 keep HDR properly.
+    /// </summary>
+    public const string HdrInH264 = "hdr-h264-limited";
+
+    /// <summary>
+    /// Re-encoding removes the Dolby Vision layer; the HDR10 base is kept where present.
+    /// </summary>
+    public const string DolbyVisionLost = "dolby-vision-lost";
+
+    /// <summary>
+    /// Re-encoding removes HDR10+ dynamic metadata; static HDR10 metadata is kept.
+    /// </summary>
+    public const string Hdr10PlusLost = "hdr10plus-lost";
 }

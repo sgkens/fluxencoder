@@ -184,6 +184,15 @@ internal sealed class EncodeCommand
         return new EncodeCommand().Create(host, session);
     }
 
+    /// <summary>
+    /// The command together with its option definitions, for <c>apply</c>, which parses each Fluxfile job through it.
+    /// </summary>
+    internal static (EncodeCommand Definition, Command Command) Define(CliHost host, CliSession session)
+    {
+        var definition = new EncodeCommand();
+        return (definition, definition.Create(host, session));
+    }
+
     private Command Create(CliHost host, CliSession session)
     {
         Codec.AcceptOnlyFromAmong(Codecs);

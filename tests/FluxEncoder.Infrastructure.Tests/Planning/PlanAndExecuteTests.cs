@@ -51,6 +51,10 @@ public sealed class PlanAndExecuteTests : IAsyncLifetime
             "-attach", Path.Combine(_directory, "font.ttf"), "-metadata:s:t", "mimetype=font/ttf", "-metadata:s:t", "filename=font.ttf",
         ]);
 
+        await GenerateAsync("clip-a.mkv", ["-f", "lavfi", "-i", "testsrc2=size=320x240:rate=25:duration=2", "-f", "lavfi", "-i", "sine=duration=2", "-c:v", "libx264", "-c:a", "aac", "-ac", "2"]);
+        await GenerateAsync("clip-b.mkv", ["-f", "lavfi", "-i", "testsrc2=size=320x240:rate=25:duration=1", "-f", "lavfi", "-i", "sine=duration=1", "-c:v", "libx264", "-c:a", "aac", "-ac", "2"]);
+        await GenerateAsync("clip-c.mp4", ["-f", "lavfi", "-i", "testsrc2=size=640x360:rate=30:duration=1.5", "-c:v", "libx264"]);
+
         await GenerateAsync("hdr10.mkv",
         [
             "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=25:duration=2",
@@ -98,6 +102,30 @@ public sealed class PlanAndExecuteTests : IAsyncLifetime
         var result = await EncodeExecutor.ExecuteAsync(Tools.FFmpeg!.Path, planned.Value.Plan!, planned.Value.Timeline, cancellationToken: Token);
         Assert.True(result.Outcome == JobOutcome.Succeeded, $"{result.Failure?.Message}\n{result.Failure?.Detail}\n{planned.Value.Plan!.Invocations[^1].ToDisplayString()}");
         return (result, planned.Value);
+    }
+
+    private PlanningContext Context() => new()
+    {
+        Capabilities = _capabilities,
+        Hardware = new CpuStrategy(),
+        FileSystem = LocalPlanningFileSystem.Instance,
+        ScratchRoot = _directory,
+    };
+
+    private async Task<JobResult> ExecuteAsync(Result<PlannedJob> planned)
+    {
+        Assert.True(planned.IsSuccess, planned.Failure?.Message);
+        var plan = planned.Value.Plan!;
+        var result = await EncodeExecutor.ExecuteAsync(Tools.FFmpeg!.Path, plan, planned.Value.Timeline, cancellationToken: Token);
+        Assert.True(result.Outcome == JobOutcome.Succeeded, $"{result.Failure?.Message}\n{result.Failure?.Detail}\n{plan.Invocations[^1].ToDisplayString()}");
+        return result;
+    }
+
+    private async Task<PlanningInput> ProbeInputAsync(string path)
+    {
+        var probed = await MediaProber.ProbeAsync(Tools.FFprobe!.Path, path, Token);
+        Assert.True(probed.IsSuccess, probed.Failure?.Message);
+        return probed.Value.ToPlanningInput();
     }
 
     private async Task<MediaInfo> ProbeOutputAsync(string path)
@@ -219,5 +247,50 @@ public sealed class PlanAndExecuteTests : IAsyncLifetime
         Assert.Contains(planned.Warnings, w => w.Code == WarningCodes.VideoDropped);
         Assert.Equal("mp3", media.AudioStreams.Single().CodecName);
         Assert.Empty(media.MotionVideoStreams);
+    }
+
+    [Fact]
+    public async Task Concat_CompatibleInputsAreCopied()
+    {
+        Assert.SkipUnless(Tools.IsComplete, "FFmpeg is not installed on this machine.");
+        var job = new ConcatJob([PathOf("clip-a.mkv"), PathOf("clip-b.mkv")], PathOf("joined.mkv"), new VideoTarget.StreamCopy(), new AudioTarget.StreamCopy());
+
+        var planned = ConcatPlanner.Plan(job, [await ProbeInputAsync(PathOf("clip-a.mkv")), await ProbeInputAsync(PathOf("clip-b.mkv"))], Context());
+        Assert.Contains("concat", planned.Value!.Plan!.Invocations.Single().Arguments);
+        await ExecuteAsync(planned);
+
+        var media = await ProbeOutputAsync(PathOf("joined.mkv"));
+        Assert.InRange(media.Duration!.Value.TotalSeconds, 2.9, 3.2);
+        Assert.False(Directory.Exists(planned.Value.Plan.ScratchDirectory));
+    }
+
+    [Fact]
+    public async Task Concat_MismatchedInputsAreNormalizedAndReencoded()
+    {
+        Assert.SkipUnless(Tools.IsComplete, "FFmpeg is not installed on this machine.");
+        var job = new ConcatJob([PathOf("clip-a.mkv"), PathOf("clip-c.mp4")], PathOf("mixed.mp4"), new VideoTarget.StreamCopy(), new AudioTarget.StreamCopy());
+
+        var planned = ConcatPlanner.Plan(job, [await ProbeInputAsync(PathOf("clip-a.mkv")), await ProbeInputAsync(PathOf("clip-c.mp4"))], Context());
+        Assert.Contains(planned.Value!.Warnings, w => w.Code == WarningCodes.ConcatReencoded);
+        await ExecuteAsync(planned);
+
+        var media = await ProbeOutputAsync(PathOf("mixed.mp4"));
+        var video = media.MotionVideoStreams.Single();
+        Assert.Equal((320, 240), (video.Width!.Value, video.Height!.Value));
+        Assert.Equal(new Rational(25, 1), video.AverageFrameRate);
+        Assert.Single(media.AudioStreams);
+        Assert.InRange(media.Duration!.Value.TotalSeconds, 3.3, 3.7);
+    }
+
+    [Fact]
+    public async Task Thumbnails_ProduceTiledSheet()
+    {
+        Assert.SkipUnless(Tools.IsComplete, "FFmpeg is not installed on this machine.");
+        var job = new ThumbnailJob { InputPath = PathOf("source.mkv"), OutputPath = PathOf("sheet.jpg"), Columns = 3, Rows = 2, TileWidth = 160 };
+
+        await ExecuteAsync(ThumbnailPlanner.Plan(job, await ProbeInputAsync(PathOf("source.mkv")), Context()));
+
+        var sheet = (await ProbeOutputAsync(PathOf("sheet.jpg"))).VideoStreams.Single();
+        Assert.Equal((480, 240), (sheet.Width!.Value, sheet.Height!.Value));
     }
 }

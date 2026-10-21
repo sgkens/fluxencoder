@@ -4,15 +4,22 @@ using FluxEncoder.Core.Encoding;
 namespace FluxEncoder.Core.Hardware;
 
 /// <summary>
-/// Maps codec requests to the FFmpeg encoder and decode arguments of one vendor.
+/// How one vendor's encoders are driven: codec mapping, decode flags, pixel formats, and quality controls.
 /// </summary>
 /// <remarks>
-/// This is the single hardware model. Quality controls (TSKE006.4), the strategy registry
-/// and capability probing (TSKE006.1, TSKE006.2), and VVC (TSKE006.6) extend this contract.
+/// A strategy describes what an encoder accepts in principle. Whether it works on this machine is established by a
+/// device-backed probe (<see cref="EncoderProbe"/>, TSKE006.2), and which strategy a job uses is decided by
+/// <see cref="HardwareSelector"/> (TSKE006.3). Option names are returned without the leading dash; the planner adds
+/// stream specifiers.
 /// </remarks>
 public interface IHardwareStrategy
 {
     HardwareVendor Vendor { get; }
+
+    /// <summary>
+    /// Name for messages, such as "AMD AMF".
+    /// </summary>
+    string DisplayName { get; }
 
     /// <summary>
     /// Arguments placed before <c>-i</c> to select hardware decoding. Empty for software decoding.
@@ -26,14 +33,13 @@ public interface IHardwareStrategy
     bool TryGetVideoEncoder(VideoCodec codec, [NotNullWhen(true)] out string? encoder);
 
     /// <summary>
-    /// Encoder options (name without the leading dash, value) that realise <paramref name="quality"/> as a
-    /// constant-quality encode. The planner adds stream specifiers.
+    /// Options that realise <paramref name="quality"/> as a constant-quality encode.
     /// </summary>
     IReadOnlyList<KeyValuePair<string, string>> GetQualityOptions(VideoCodec codec, QualityPreset quality);
 
     /// <summary>
-    /// Encoder options for a target-bit-rate encode at <paramref name="quality"/>: the speed preset without
-    /// the constant-quality setting, which a bit-rate target replaces.
+    /// Options for a target-bit-rate encode at <paramref name="quality"/>: the speed preset and rate-control
+    /// mode, without the constant-quality setting. The planner adds the bit rate itself.
     /// </summary>
     IReadOnlyList<KeyValuePair<string, string>> GetBitRateOptions(VideoCodec codec, QualityPreset quality);
 
@@ -41,4 +47,10 @@ public interface IHardwareStrategy
     /// Whether the encoder for <paramref name="codec"/> supports FFmpeg's <c>-pass</c>/<c>-passlogfile</c>.
     /// </summary>
     bool SupportsTwoPass(VideoCodec codec);
+
+    /// <summary>
+    /// The input pixel format the encoder takes for 8-bit or high-bit-depth output, or <see langword="null"/> when it
+    /// cannot encode that depth at all.
+    /// </summary>
+    string? GetPixelFormat(VideoCodec codec, bool highBitDepth);
 }

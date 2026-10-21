@@ -22,6 +22,7 @@ public static class FFmpegFailureClassifier
             "CUDA_ERROR", "Failed to initialise VAAPI", "No VA display found", "Error creating a MFX session",
             "Failed to create a VAAPI device", "Device creation failed", "No device available for decoder",
             "AMF failed", "DLL amfrt64.dll failed to open", "VTCompressionSessionCreate failed",
+            "CreateComponent(AMFVideoEncoder", "10-bit encoder is not supported by AMD GPU drivers",
         ]),
         (FailureCategory.Unsupported,
         [
@@ -49,10 +50,11 @@ public static class FFmpegFailureClassifier
     private static readonly string[] ErrorWords = ["Error", "error", "failed", "Invalid", "Unknown", "Cannot", "not found", "No such", "denied"];
 
     /// <summary>
-    /// FFmpeg 8 exits with code 0 when <c>-n</c> refuses to overwrite an existing output. These messages mean
-    /// no output was produced whatever the exit code says.
+    /// FFmpeg 8 exits with code 0 when <c>-n</c> refuses to overwrite an existing output, and the Windows 7.1 build
+    /// exits with code 0 when AMF refuses a 10-bit encode. These messages mean no output was produced whatever the
+    /// exit code says.
     /// </summary>
-    private static readonly string[] FailureDespiteZeroExit = ["already exists. Exiting", "Error opening output file"];
+    private static readonly string[] FailureDespiteZeroExit = ["already exists. Exiting", "Error opening output file", "Error while opening encoder"];
 
     /// <summary>
     /// Whether stderr shows a failure even though FFmpeg exited with code 0.

@@ -11,6 +11,11 @@ public sealed class FFmpegFailureClassifierTests
     [InlineData("[h264_nvenc @ 0x1] Cannot load libcuda.so.1\nError while opening encoder", FailureCategory.HardwareUnavailable)]
     [InlineData("[hevc_nvenc @ 0x1] OpenEncodeSessionEx failed: unsupported device (2): (no details)", FailureCategory.HardwareUnavailable)]
     [InlineData("[AVHWDeviceContext @ 0x1] Failed to initialise VAAPI connection: -1 (unknown libva error).", FailureCategory.HardwareUnavailable)]
+    [InlineData("[av1_amf @ 0] CreateComponent(AMFVideoEncoderHW_AV1) failed with error 11\n[vost#0:0/av1_amf @ 0] Error while opening encoder\nError sending frames to consumers: Encoder not found", FailureCategory.HardwareUnavailable)]
+    [InlineData("[hevc_amf @ 0] 10-bit encoder is not supported by AMD GPU drivers versions lower than 23.30.", FailureCategory.HardwareUnavailable)]
+    [InlineData("[h264_qsv @ 0] Error creating a MFX session: -9.", FailureCategory.HardwareUnavailable)]
+    [InlineData("[h264_nvenc @ 0] Cannot load nvcuda.dll", FailureCategory.HardwareUnavailable)]
+    [InlineData("[h264_nvenc @ 0] OpenEncodeSessionEx failed: out of memory (10): (no details)", FailureCategory.HardwareUnavailable)]
     [InlineData("Unknown encoder 'libfoo'", FailureCategory.Unsupported)]
     [InlineData("Unrecognized option 'bogus'.\nError splitting the argument list: Option not found", FailureCategory.Unsupported)]
     [InlineData("[mp4 @ 0x1] Could not find tag for codec pcm_s16le in stream #1, codec not currently supported in container", FailureCategory.Unsupported)]
@@ -48,5 +53,15 @@ public sealed class FFmpegFailureClassifierTests
     public void HardwareUnavailable_ExitsAsUnsupported()
     {
         Assert.Equal(ExitCode.Unsupported, FailureCategory.HardwareUnavailable.ToExitCode());
+    }
+
+    [Theory]
+    [InlineData("[hevc_amf @ 0] 10-bit encoder is not supported by AMD GPU drivers versions lower than 23.30.\n[vost#0:0/hevc_amf @ 0] Error while opening encoder - maybe incorrect parameters such as bit_rate, rate, width or height.", true)]
+    [InlineData("File 'out.mkv' already exists. Exiting.", true)]
+    [InlineData("[libx264 @ 0] using cpu capabilities: MMX2 SSE2Fast", false)]
+    public void IndicatesFailure_CatchesErrorsReportedWithExitCodeZero(string stderr, bool expected)
+    {
+        // Observed: Windows FFmpeg 7.1.1 exits 0 after AMF refuses a 10-bit encode on a Radeon RX 580.
+        Assert.Equal(expected, FFmpegFailureClassifier.IndicatesFailure(stderr));
     }
 }

@@ -105,21 +105,24 @@ public static class FFmpegListingParser
 
         var formats = ImmutableArray.CreateBuilder<FormatEntry>();
 
-        foreach (var row in RowsAfterSeparator(text))
+        // The flag column is two characters wide up to FFmpeg 6 (" DE name") and three from FFmpeg 7, which added a
+        // device flag (" DEd name"). The dashed separator under the legend has one dash per flag column.
+        var (rows, width) = RowsAfterSeparatorWithWidth(text);
+
+        foreach (var row in rows)
         {
-            // " DEd name  description": a 3-character flag field after one leading space.
-            if (row.Length < 6 || row[0] != ' ' || row[4] != ' ')
+            if (row.Length < width + 3 || row[0] != ' ' || row[width + 1] != ' ')
             {
                 continue;
             }
 
-            var flags = row.AsSpan(1, 3);
-            if (!flags.ContainsAny('D', 'E') || SplitNameAndRest(row[5..]) is not var (names, description))
+            var flags = row.AsSpan(1, width);
+            if (!flags.ContainsAny('D', 'E') || SplitNameAndRest(row[(width + 2)..]) is not var (names, description))
             {
                 continue;
             }
 
-            formats.Add(new FormatEntry(names.Split(','), description, isDevice: flags[2] == 'd'));
+            formats.Add(new FormatEntry(names.Split(','), description, isDevice: width > 2 && flags[2] == 'd'));
         }
 
         return formats.ToImmutable();
@@ -144,9 +147,12 @@ public static class FFmpegListingParser
                 continue;
             }
 
-            if (line.Length > 4 && line[0] == ' ' && line[3] == ' ' && SplitNameAndRest(line[4..]) is var (name, rest) && rest.Contains("->", StringComparison.Ordinal))
+            // Rows are "flags name io description". The flag count changed between releases (FFmpeg 5.1 "..C",
+            // FFmpeg 8 "TS"), so fields are read as whitespace-separated tokens rather than at fixed columns.
+            var tokens = line.Split(' ', 4, StringSplitOptions.RemoveEmptyEntries);
+            if (tokens.Length >= 3 && tokens[2].Contains("->", StringComparison.Ordinal) && tokens[0].All(c => c is '.' or 'T' or 'S' or 'C' or '|'))
             {
-                filters.Add(name);
+                filters.Add(tokens[1]);
             }
         }
 
@@ -202,11 +208,19 @@ public static class FFmpegListingParser
     private static IEnumerable<string> Lines(string text) =>
         text.Split('\n').Select(line => line.TrimEnd('\r'));
 
-    private static IEnumerable<string> RowsAfterSeparator(string text) =>
-        Lines(text)
-            .SkipWhile(line => !IsSeparator(line))
-            .Skip(1)
-            .Where(line => line.Trim().Length > 0);
+    private static IEnumerable<string> RowsAfterSeparator(string text) => RowsAfterSeparatorWithWidth(text).Rows;
+
+    private static (IEnumerable<string> Rows, int Width) RowsAfterSeparatorWithWidth(string text)
+    {
+        var lines = Lines(text).ToList();
+        var separator = lines.FindIndex(IsSeparator);
+        if (separator < 0)
+        {
+            return ([], 0);
+        }
+
+        return (lines.Skip(separator + 1).Where(line => line.Trim().Length > 0), lines[separator].Trim().Length);
+    }
 
     private static bool IsSeparator(string line)
     {

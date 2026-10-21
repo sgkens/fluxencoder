@@ -54,11 +54,6 @@ public static class EncodePlanner
             return Fail(FailureCategory.Unsupported, $"This FFmpeg build cannot write {profile.Muxer} files.");
         }
 
-        if (job.Hardware is { } vendor && vendor != context.Hardware.Vendor)
-        {
-            return Fail(FailureCategory.Unsupported, $"{vendor} hardware encoding is not available yet; omit --hardware to encode on the CPU.");
-        }
-
         var (timeline, seek, length, trimFailure) = ResolveTrim(job, input, warnings);
         if (trimFailure is not null)
         {
@@ -140,7 +135,8 @@ public static class EncodePlanner
         var scratch = twoPass ? Path.Combine(context.ScratchRoot, "flux-" + token) : null;
         var passLog = scratch is null ? null : Path.Combine(scratch, "pass");
 
-        var head = InputArguments(input, seek, length, exactCut: !streams.Any(s => s.IsMotionVideo && s.IsCopy));
+        var transcodesVideo = input.IsProbed ? streams.Any(s => s.IsMotionVideo && !s.IsCopy) : job.Video is VideoTarget.Encode;
+        var head = InputArguments(input, seek, length, exactCut: !streams.Any(s => s.IsMotionVideo && s.IsCopy), transcodesVideo ? context.Hardware.DecodeArguments : []);
         var invocations = new List<FFmpegInvocation>();
 
         if (twoPass)
@@ -259,9 +255,9 @@ public static class EncodePlanner
     /// pre-roll, for example); the output-side seek drops them so every stream starts at the cut. Not used when the
     /// video itself is copied, where dropping those packets would remove the keyframe the first frames depend on.
     /// </param>
-    private static List<string> InputArguments(PlanningInput input, TimeSpan seek, TimeSpan? length, bool exactCut)
+    private static List<string> InputArguments(PlanningInput input, TimeSpan seek, TimeSpan? length, bool exactCut, IReadOnlyList<string> decode)
     {
-        var arguments = new List<string>();
+        var arguments = new List<string>(decode);
 
         if (seek > TimeSpan.Zero)
         {

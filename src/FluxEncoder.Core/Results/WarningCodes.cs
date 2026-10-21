@@ -150,4 +150,24 @@ public static class WarningCodes
     /// HDR video could not be tone-mapped (no zscale/tonemap filters), so thumbnails look washed out.
     /// </summary>
     public const string ThumbnailsHdrWashedOut = "thumbnails-hdr-washed-out";
+
+    /// <summary>
+    /// The selected hardware encoder could not be used, so the CPU encoded instead.
+    /// </summary>
+    public const string HardwareFallback = "hardware-fallback";
+
+    /// <summary>
+    /// The encoder cannot write 10-bit here, so HDR video is encoded 8-bit and will band.
+    /// </summary>
+    public const string HdrNotPreserved = "hdr-not-preserved";
+
+    /// <summary>
+    /// Hardware encoders may not write HDR10 mastering metadata; the CPU encoder guarantees it.
+    /// </summary>
+    public const string HardwareHdrMetadata = "hardware-hdr-metadata";
+
+    /// <summary>
+    /// VVC (H.266) encoding is experimental and few players can decode it yet.
+    /// </summary>
+    public const string VvcExperimental = "vvc-experimental";
 }

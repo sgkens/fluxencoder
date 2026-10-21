@@ -65,6 +65,22 @@ public sealed record JobResult
         return new(outputPath, JobOutcome.Failed, warnings ?? []) { Failure = failure };
     }
 
+    /// <summary>
+    /// This result with warnings from earlier stages (probing, hardware selection, planning) placed before its own.
+    /// </summary>
+    public JobResult WithEarlierWarnings(IEnumerable<JobWarning> earlier)
+    {
+        ArgumentNullException.ThrowIfNull(earlier);
+
+        return new JobResult(OutputPath, Outcome, [.. earlier, .. Warnings])
+        {
+            Failure = Failure,
+            SkipReason = SkipReason,
+            Elapsed = Elapsed,
+            Attempts = Attempts,
+        };
+    }
+
     public bool Equals(JobResult? other) =>
         other is not null
         && OutputPath == other.OutputPath

@@ -9,4 +9,10 @@ public enum VideoCodec
     H264,
     Hevc,
     Av1,
+
+    /// <summary>
+    /// H.266/VVC. Experimental: available only when the FFmpeg build includes <c>libvvenc</c>, and few players
+    /// decode it yet.
+    /// </summary>
+    Vvc,
 }

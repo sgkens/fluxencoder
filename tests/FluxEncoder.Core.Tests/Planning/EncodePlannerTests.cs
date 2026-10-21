@@ -115,14 +115,6 @@ public sealed class EncodePlannerTests
     }
 
     [Fact]
-    public void ForcedHardware_IsUnsupportedUntilStrategiesExist()
-    {
-        var job = Job("/media/out/a.mkv") with { Hardware = FluxEncoder.Core.Hardware.HardwareVendor.Nvidia };
-
-        Assert.Equal(FailureCategory.Unsupported, Failure(job).Category);
-    }
-
-    [Fact]
     public void H264FromHdr_WarnsAndStays8Bit()
     {
         var planned = Planned(Job("/media/out/a.mkv", new VideoTarget.Encode(VideoCodec.H264, QualityPreset.Fast)));

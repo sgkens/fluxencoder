@@ -20,4 +20,19 @@ public static class WarningCodes
     /// No subtitle stream matched the requested languages; the output has no subtitles.
     /// </summary>
     public const string SubtitleLanguageNotFound = "subtitle-language-not-found";
+
+    /// <summary>
+    /// A local file without a usable duration; it is processed like an unbounded input.
+    /// </summary>
+    public const string DurationUnknown = "duration-unknown";
+
+    /// <summary>
+    /// FFmpeg could not identify a stream's codec.
+    /// </summary>
+    public const string UnknownCodec = "unknown-codec";
+
+    /// <summary>
+    /// The input is a pipe and was not probed, so stream selection cannot be applied in advance.
+    /// </summary>
+    public const string InputNotProbed = "input-not-probed";
 }

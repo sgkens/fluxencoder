@@ -1,0 +1,2 @@
+Hardware acceleration methods:
+

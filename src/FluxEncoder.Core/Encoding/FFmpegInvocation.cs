@@ -29,6 +29,13 @@ public sealed record FFmpegInvocation
     public ImmutableArray<string> Arguments { get; }
 
     /// <summary>
+    /// The redacted, shell-quoted command line for display. Secrets are masked; see <see cref="ArgumentRedactor"/>.
+    /// </summary>
+    public string ToDisplayString(string executable = "ffmpeg") => CommandDisplay.Render(executable, Arguments);
+
+    public override string ToString() => ToDisplayString();
+
+    /// <summary>
     /// Compares argument sequences, not array identity, so plans can be compared in snapshot tests (TSKE005.1).
     /// </summary>
     public bool Equals(FFmpegInvocation? other) =>

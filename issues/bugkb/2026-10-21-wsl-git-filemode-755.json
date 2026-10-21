@@ -1,0 +1,10 @@
+{
+  "type": "gotcha",
+  "title": "git in WSL2 on a /mnt/<drive> repo shows every file modified (mode 100644 -> 100755) and commits new files as executable",
+  "symptom": "'git status' lists every tracked file as modified, but 'git diff --stat' shows '0 insertions(+), 0 deletions(-)' and 'git diff --summary' shows 'mode change 100644 => 100755'. New files are committed as 100755. A merge can abort with 'error: Your local changes to the following files would be overwritten by merge' although nothing was edited.",
+  "cause": "DrvFs mounts Windows drives without Unix permission metadata by default, so every file reports 0777-style permissions and git, with core.fileMode=true, records the executable bit.",
+  "fix": "Run 'git config core.fileMode false' in the repository (local config), so git ignores mode bits. Repair already-committed modes with: git ls-tree -r HEAD | awk '$1==\"100755\"{print $4}' | xargs git update-index --chmod=-x && git commit (exclude real scripts; awk's RS='\\0' is unsupported in mawk, so use newline-separated paths). Alternatively mount drives with metadata (/etc/wsl.conf: [automount] options = \"metadata\") or keep the clone in the WSL filesystem.",
+  "tags": ["git", "wsl", "wsl2", "windows"],
+  "env": {"os": "Windows 11 + WSL2", "wsl_kernel": "5.15.153.1-microsoft-standard-WSL2", "git": "2.39.5", "filesystem": "DrvFs /mnt/g"},
+  "scope": "general"
+}

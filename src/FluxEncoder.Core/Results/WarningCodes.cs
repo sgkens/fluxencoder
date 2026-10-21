@@ -170,4 +170,9 @@ public static class WarningCodes
     /// VVC (H.266) encoding is experimental and few players can decode it yet.
     /// </summary>
     public const string VvcExperimental = "vvc-experimental";
+
+    /// <summary>
+    /// Raw FFmpeg arguments were added with --ffmpeg-arg; FluxEncoder cannot check what they do.
+    /// </summary>
+    public const string ExtraArguments = "extra-arguments";
 }

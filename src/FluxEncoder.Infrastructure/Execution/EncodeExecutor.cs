@@ -204,6 +204,12 @@ public static class EncodeExecutor
             };
         }
 
+        // FFmpeg stops cleanly at -fs, so reaching the limit looks like success; the output is cut short.
+        if (plan.MaxOutputBytes is { } limit && written.Length >= limit)
+        {
+            return new JobFailure(FailureCategory.PolicyDenied, $"The output reached the {limit / (1024 * 1024)} MB size limit and is incomplete.");
+        }
+
         try
         {
             File.Move(temporary, plan.FinalOutputPath, overwrite: policy.Overwrite == OverwritePolicy.Overwrite);

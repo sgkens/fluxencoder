@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using FluxEncoder.Core.Security;
 
 namespace FluxEncoder.Infrastructure.Configuration;
 
@@ -30,11 +31,23 @@ public sealed record FluxSettings
 
     public HistorySettings History { get; init; } = HistorySettings.Default;
 
+    /// <summary>
+    /// Allowed inputs, protocols, folders, and raw FFmpeg arguments (TSKE010.1, TSKE010.2).
+    /// </summary>
+    public SourcePolicy Security { get; init; } = SourcePolicy.Default;
+
+    /// <summary>
+    /// Ceilings for service use (TSKE010.6).
+    /// </summary>
+    public ResourceLimits Limits { get; init; } = ResourceLimits.None;
+
     public bool Equals(FluxSettings? other) =>
         other is not null
         && Encode.Count == other.Encode.Count && Encode.All(e => other.Encode.TryGetValue(e.Key, out var v) && v == e.Value)
         && Presets.Count == other.Presets.Count && Presets.All(p => other.Presets.TryGetValue(p.Key, out var v) && v == p.Value)
-        && History == other.History;
+        && History == other.History
+        && Security == other.Security
+        && Limits == other.Limits;
 
     public override int GetHashCode() => HashCode.Combine(Encode.Count, Presets.Count, History);
 }

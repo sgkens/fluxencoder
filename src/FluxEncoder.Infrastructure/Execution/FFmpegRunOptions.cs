@@ -37,6 +37,24 @@ public sealed record FFmpegRunOptions
     } = TimeSpan.FromMinutes(2);
 
     /// <summary>
+    /// Stop FFmpeg after this much wall-clock time (TSKE010.6); the run fails as a timeout. <see langword="null"/> means
+    /// no limit.
+    /// </summary>
+    public TimeSpan? MaxRunTime
+    {
+        get;
+        init
+        {
+            if (value is { } limit)
+            {
+                ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(limit, TimeSpan.Zero);
+            }
+
+            field = value;
+        }
+    }
+
+    /// <summary>
     /// Characters of stderr kept for diagnostics (the tail).
     /// </summary>
     public int MaxErrorChars

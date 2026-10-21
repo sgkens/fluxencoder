@@ -46,6 +46,16 @@ public static class EncodePlanner
             return denied;
         }
 
+        if (!job.ExtraArguments.IsEmpty && !context.Policy.AllowExtraArguments)
+        {
+            return Fail(FailureCategory.PolicyDenied, "--ffmpeg-arg is disabled here: raw FFmpeg arguments could read or write any file or network location.");
+        }
+
+        if (context.Limits.MaxInputBytes is { } maxInput && input.Media.SizeBytes > maxInput)
+        {
+            return Fail(FailureCategory.PolicyDenied, $"The input is {input.Media.SizeBytes / (1024 * 1024)} MB, over the {maxInput / (1024 * 1024)} MB limit.");
+        }
+
         var profile = ContainerProfile.ForPath(job.OutputPath);
         if (profile is null)
         {
@@ -186,6 +196,16 @@ public static class EncodePlanner
             main.AddRange(["-movflags", "+faststart"]);
         }
 
+        main.AddRange(LimitArguments(context.Limits));
+
+        if (!job.ExtraArguments.IsEmpty)
+        {
+            main.AddRange(job.ExtraArguments);
+            warnings.Add(new JobWarning(
+                WarningCodes.ExtraArguments,
+                $"Raw FFmpeg arguments were added ({string.Join(' ', ArgumentRedactor.Redact(job.ExtraArguments))}); FluxEncoder cannot check what they do."));
+        }
+
         if (twoPass)
         {
             main.AddRange(["-pass", "2", "-passlogfile", passLog!]);
@@ -199,11 +219,36 @@ public static class EncodePlanner
             FinalOutputPath = final,
             TemporaryOutputPath = temporary,
             ScratchDirectory = scratch,
+            MaxOutputBytes = context.Limits.MaxOutputBytes,
         };
 
         return Result<PlannedJob>.Success(PlannedJob.Run(plan, timeline, warnings));
 
         Result<PlannedJob> Fail(FailureCategory category, string message) => new JobFailure(category, message);
+    }
+
+    /// <summary>
+    /// Output options enforcing <see cref="ResourceLimits"/>: <c>-fs</c> for output size and thread counts for encoding
+    /// and filtering.
+    /// </summary>
+    public static IEnumerable<string> LimitArguments(ResourceLimits limits)
+    {
+        ArgumentNullException.ThrowIfNull(limits);
+
+        if (limits.MaxOutputBytes is { } bytes)
+        {
+            yield return "-fs";
+            yield return bytes.ToString(CultureInfo.InvariantCulture);
+        }
+
+        if (limits.Threads is { } threads)
+        {
+            var value = threads.ToString(CultureInfo.InvariantCulture);
+            yield return "-threads";
+            yield return value;
+            yield return "-filter_threads";
+            yield return value;
+        }
     }
 
     /// <summary>

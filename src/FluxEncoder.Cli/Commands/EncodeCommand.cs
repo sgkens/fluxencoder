@@ -21,6 +21,11 @@ internal sealed class EncodeCommand
 {
     public const string Name = "encode";
 
+    /// <summary>
+    /// Set to 1 by administrators of shared or service installs: disables <c>--ffmpeg-arg</c> regardless of settings.
+    /// </summary>
+    public const string ManagedVariable = "FLUXENCODER_MANAGED";
+
     private static readonly string[] Codecs = ["h264", "hevc", "av1", "vvc", "copy"];
     private static readonly string[] AudioCodecs = ["copy", "aac", "opus", "ac3", "eac3", "flac", "mp3"];
     private static readonly string[] Qualities = ["fast", "balanced", "high"];
@@ -149,6 +154,14 @@ internal sealed class EncodeCommand
 
     public readonly Option<bool> NoColor = new("--no-color") { Description = "Disable colour (also NO_COLOR=1)." };
 
+    public readonly Option<string[]> FFmpegArgs = new("--ffmpeg-arg")
+    {
+        Description = "Pass one raw argument to FFmpeg among the output options; repeat for more (--ffmpeg-arg -tune --ffmpeg-arg film). " +
+            "Raw arguments bypass FluxEncoder's checks and can read or write any file or URL. Disabled when FLUXENCODER_MANAGED=1.",
+        AllowMultipleArgumentsPerToken = false,
+        Arity = ArgumentArity.ZeroOrMore,
+    };
+
     public readonly Option<string?> Preset = new("--preset", "-p")
     {
         Description = "Use a named preset from settings.json; typed options still win. See 'config init'.",
@@ -196,7 +209,7 @@ internal sealed class EncodeCommand
             Video, Audio, Subtitles, NoChapters, NoMetadata, NoCover, NoAttachments, KeepData,
             Start, End, Duration, HardwareOption, HardwareFallback,
             Overwrite, SkipExisting, RenameExisting, KeepPartial, Retries, FailFast,
-            DryRun, Json, Quiet, Verbose, NoColor, Preset, NoConfig, FFmpeg, FFprobe,
+            DryRun, Json, Quiet, Verbose, NoColor, Preset, NoConfig, FFmpegArgs, FFmpeg, FFprobe,
         };
 
         command.Validators.Add(Validate);
@@ -309,7 +322,16 @@ internal sealed class EncodeCommand
             : await RunHistory.OpenAsync(host, session.Settings.History, reporter, cancellationToken).ConfigureAwait(false);
 
         var reserved = new HashSet<string>(OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
-        var environment = tools.Value with { ReservedOutputs = reserved };
+        var managed = host.GetVariable(ManagedVariable) is "1" or "true";
+        var policy = managed ? session.Settings.Security with { AllowExtraArguments = false } : session.Settings.Security;
+        var limits = session.Settings.Limits;
+        var environment = tools.Value with
+        {
+            ReservedOutputs = reserved,
+            Policy = policy,
+            Limits = limits,
+            RunOptions = tools.Value.RunOptions with { MaxRunTime = limits.MaxRunTime },
+        };
         var reports = new List<JobReport>();
         var notStarted = 0;
         var failFast = parse.GetValue(FailFast);
@@ -444,6 +466,7 @@ internal sealed class EncodeCommand
             Audio = audio,
             Hardware = hardware,
             HardwareFallback = parse.GetValue(HardwareFallback),
+            ExtraArguments = [.. parse.GetValue(FFmpegArgs) ?? []],
             Trim = start is null && end is null && duration is null ? null : new TrimRange(start, end, duration),
             Streams = new StreamSelection
             {

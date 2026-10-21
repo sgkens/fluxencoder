@@ -18,7 +18,7 @@ internal static class SettingsMerge
     /// </summary>
     private static readonly HashSet<string> PerInvocation = new(StringComparer.Ordinal)
     {
-        "--output", "--dry-run", "--json", "--preset", "--no-config",
+        "--output", "--dry-run", "--json", "--preset", "--no-config", "--ffmpeg-arg",
     };
 
     public sealed record Outcome(IReadOnlyList<string> Arguments, IReadOnlyList<string> Notices, IReadOnlyList<string> Provenance, string? Error);

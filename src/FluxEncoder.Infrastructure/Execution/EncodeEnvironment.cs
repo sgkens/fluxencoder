@@ -41,6 +41,8 @@ public sealed record EncodeEnvironment
     /// </summary>
     public SourcePolicy Policy { get; init; } = SourcePolicy.Default;
 
+    public ResourceLimits Limits { get; init; } = ResourceLimits.None;
+
     public PlanningContext PlanningContext(IHardwareStrategy strategy) => new()
     {
         Capabilities = Capabilities,
@@ -49,5 +51,6 @@ public sealed record EncodeEnvironment
         ScratchRoot = ScratchRoot,
         ReservedOutputs = ReservedOutputs,
         Policy = Policy,
+        Limits = Limits,
     };
 }

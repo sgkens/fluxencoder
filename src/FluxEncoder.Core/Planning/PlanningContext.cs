@@ -40,4 +40,6 @@ public sealed record PlanningContext
     /// Which inputs and locations are allowed, and how inputs are opened (TSKE010.2).
     /// </summary>
     public SourcePolicy Policy { get; init; } = SourcePolicy.Default;
+
+    public ResourceLimits Limits { get; init; } = ResourceLimits.None;
 }

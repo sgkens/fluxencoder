@@ -130,4 +130,24 @@ public static class WarningCodes
     /// Re-encoding removes HDR10+ dynamic metadata; static HDR10 metadata is kept.
     /// </summary>
     public const string Hdr10PlusLost = "hdr10plus-lost";
+
+    /// <summary>
+    /// The inputs could not be joined by stream copy and were re-encoded.
+    /// </summary>
+    public const string ConcatReencoded = "concat-reencoded";
+
+    /// <summary>
+    /// Joining by re-encode does not carry HDR metadata.
+    /// </summary>
+    public const string ConcatHdrNotPreserved = "concat-hdr-not-preserved";
+
+    /// <summary>
+    /// HDR video was tone-mapped to SDR for the thumbnail sheet.
+    /// </summary>
+    public const string ThumbnailsToneMapped = "thumbnails-tone-mapped";
+
+    /// <summary>
+    /// HDR video could not be tone-mapped (no zscale/tonemap filters), so thumbnails look washed out.
+    /// </summary>
+    public const string ThumbnailsHdrWashedOut = "thumbnails-hdr-washed-out";
 }

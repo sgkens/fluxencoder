@@ -186,4 +186,26 @@ public sealed class FFmpegCapabilityTests
 
         Assert.Equal(FailureCategory.DependencyMissing, result.Failure?.Category);
     }
+
+    [Fact]
+    public void Ffmpeg51Layout_IsParsedToo()
+    {
+        static string Read(string name) => Fixture.Read("ffmpeg-5.1", name + ".txt");
+
+        var result = FFmpegCapabilityProbe.Parse(
+            Read("version"), Read("encoders"), Read("decoders"), Read("muxers"), Read("demuxers"),
+            Read("protocols"), Read("filters"), Read("hwaccels"), "/usr/bin/ffmpeg");
+
+        Assert.True(result.IsSuccess);
+        var caps = result.Value;
+        Assert.Equal(5, caps.Version.Major);
+        Assert.True(caps.Muxers.Contains("matroska"));
+        Assert.True(caps.Muxers.Contains("mp4"));
+        Assert.True(caps.Demuxers.AreSameFormat("webm", "matroska"));
+        Assert.True(caps.HasFilter("acompressor"));
+        Assert.True(caps.HasFilter("scale"));
+        Assert.True(caps.HasEncoder("h264_nvenc"));
+        Assert.Contains("vaapi", caps.HardwareAccelerators);
+        Assert.True(caps.Filters.Count > 300);
+    }
 }

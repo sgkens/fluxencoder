@@ -44,6 +44,39 @@ public sealed class LanguageTagTests
         Assert.Equal(lower, upper);
     }
 
+    [Theory]
+    [InlineData("en", "eng", true)]
+    [InlineData("eng", "en", true)]
+    [InlineData("fre", "fra", true)]
+    [InlineData("fr", "fre", true)]
+    [InlineData("ger", "de", true)]
+    [InlineData("chi", "zho", true)]
+    [InlineData("pt", "pt-BR", true)]
+    [InlineData("pt", "por", true)]
+    [InlineData("pt-BR", "pt-br", true)]
+    [InlineData("pt-BR", "por-BR", true)]
+    [InlineData("pt-BR", "pt-PT", false)]
+    [InlineData("pt-BR", "por", false)]
+    [InlineData("eng", "spa", false)]
+    [InlineData("nb", "no", false)]
+    [InlineData("tlh", "tlh", true)]
+    public void Matches_TreatsIsoCodeFormsAsEquivalent(string requested, string stream, bool expected)
+    {
+        Assert.True(LanguageTag.TryParse(requested, out var request));
+        Assert.True(LanguageTag.TryParse(stream, out var streamTag));
+
+        Assert.Equal(expected, request.Matches(streamTag));
+    }
+
+    [Fact]
+    public void Matches_DefaultTagMatchesNothing()
+    {
+        Assert.True(LanguageTag.TryParse("eng", out var eng));
+
+        Assert.False(default(LanguageTag).Matches(eng));
+        Assert.False(eng.Matches(default));
+    }
+
     [Fact]
     public void Default_ToStringIsEmpty()
     {

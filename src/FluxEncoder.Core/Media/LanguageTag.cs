@@ -24,6 +24,30 @@ public readonly record struct LanguageTag
     /// </summary>
     public string PrimarySubtag => Value.Split('-', 2)[0];
 
+    /// <summary>
+    /// The primary subtag in ISO 639-2/T form, so <c>en</c>, <c>eng</c> give <c>eng</c> and <c>fre</c>,
+    /// <c>fra</c>, <c>fr</c> give <c>fra</c>.
+    /// </summary>
+    public string CanonicalPrimarySubtag => IsoLanguages.Canonicalize(PrimarySubtag);
+
+    /// <summary>
+    /// Whether a stream tagged <paramref name="streamLanguage"/> satisfies this requested language.
+    /// A bare request (<c>pt</c>) matches any variant (<c>por</c>, <c>pt-BR</c>); a request with subtags
+    /// (<c>pt-BR</c>) also requires the same subtags.
+    /// </summary>
+    public bool Matches(LanguageTag streamLanguage)
+    {
+        if (Value is null || streamLanguage.Value is null
+            || !string.Equals(CanonicalPrimarySubtag, streamLanguage.CanonicalPrimarySubtag, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var requestedRest = Value.AsSpan(PrimarySubtag.Length);
+        return requestedRest.IsEmpty
+            || requestedRest.Equals(streamLanguage.Value.AsSpan(streamLanguage.PrimarySubtag.Length), StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <returns>
     /// <see langword="false"/> for empty or malformed text and for <c>und</c>.
     /// </returns>

@@ -175,4 +175,9 @@ public static class WarningCodes
     /// Raw FFmpeg arguments were added with --ffmpeg-arg; FluxEncoder cannot check what they do.
     /// </summary>
     public const string ExtraArguments = "extra-arguments";
+
+    /// <summary>
+    /// Location and recording-device tags were removed from the output (TSKE011.6).
+    /// </summary>
+    public const string PrivateMetadataRemoved = "private-metadata-removed";
 }

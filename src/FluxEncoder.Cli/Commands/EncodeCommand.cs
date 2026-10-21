@@ -103,6 +103,11 @@ internal sealed class EncodeCommand
 
     public readonly Option<bool> NoMetadata = new("--no-metadata") { Description = "Drop container tags such as title (stream languages are kept)." };
 
+    public readonly Option<bool> KeepPrivateMetadata = new("--keep-private-metadata")
+    {
+        Description = "Keep location (GPS) and recording-device tags, which are removed by default.",
+    };
+
     public readonly Option<bool> NoCover = new("--no-cover") { Description = "Drop cover art." };
 
     public readonly Option<bool> NoAttachments = new("--no-attachments") { Description = "Drop attachments such as subtitle fonts." };
@@ -213,7 +218,7 @@ internal sealed class EncodeCommand
         var command = new Command(Name, "Convert media files with FFmpeg: re-encode or copy video, choose tracks, trim, and batch.")
         {
             Inputs, Output, Format, Codec, Quality, VideoBitRate, TwoPass, AudioCodec, AudioBitRate,
-            Video, Audio, Subtitles, NoChapters, NoMetadata, NoCover, NoAttachments, KeepData,
+            Video, Audio, Subtitles, NoChapters, NoMetadata, KeepPrivateMetadata, NoCover, NoAttachments, KeepData,
             Start, End, Duration, HardwareOption, HardwareFallback,
             Overwrite, SkipExisting, RenameExisting, KeepPartial, Retries, FailFast,
             DryRun, Json, Quiet, Verbose, NoColor, Preset, NoConfig, FFmpegArgs, FFmpeg, FFprobe,
@@ -433,6 +438,7 @@ internal sealed class EncodeCommand
                 Subtitles = Tracks(parse.GetValue(Subtitles)),
                 Chapters = !parse.GetValue(NoChapters),
                 Metadata = !parse.GetValue(NoMetadata),
+                PrivateMetadata = parse.GetValue(KeepPrivateMetadata),
                 CoverArt = !parse.GetValue(NoCover),
                 Attachments = !parse.GetValue(NoAttachments),
                 DataStreams = parse.GetValue(KeepData),

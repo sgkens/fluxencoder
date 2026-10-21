@@ -47,6 +47,12 @@ public sealed record StreamSelection
     public bool Metadata { get; init; } = true;
 
     /// <summary>
+    /// Keep location and recording-device tags (<see cref="MetadataPrivacy"/>) along with the other container tags.
+    /// Off by default: a converted file is often shared, and those tags tell where and on what it was recorded.
+    /// </summary>
+    public bool PrivateMetadata { get; init; }
+
+    /// <summary>
     /// Attached pictures, always stream-copied, never passed through the video encoder.
     /// </summary>
     public bool CoverArt { get; init; } = true;

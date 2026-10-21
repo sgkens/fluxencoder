@@ -93,7 +93,7 @@ public static class EncodePlanner
             keepChapters = fit.KeepChapters;
             keepMetadata = fit.KeepMetadata;
         }
-        else if (job.Streams != StreamSelection.Default)
+        else if (job.Streams with { PrivateMetadata = false } != StreamSelection.Default)
         {
             return Fail(FailureCategory.InvalidUsage, "Stream selection needs a probed input; pipe input uses FFmpeg's default stream choice.");
         }
@@ -184,6 +184,18 @@ public static class EncodePlanner
         if (!keepMetadata)
         {
             main.AddRange(["-map_metadata:g", "-1"]);
+        }
+        else if (!job.Streams.PrivateMetadata && MetadataPrivacy.PrivateKeys(input.Media.Tags) is { Count: > 0 } removed)
+        {
+            // An empty value deletes the copied tag.
+            foreach (var key in removed)
+            {
+                main.AddRange(["-metadata:g", key + "="]);
+            }
+
+            warnings.Add(new JobWarning(
+                WarningCodes.PrivateMetadataRemoved,
+                $"Removed location and device tags ({string.Join(", ", removed)}); --keep-private-metadata keeps them."));
         }
 
         if (!keepChapters)

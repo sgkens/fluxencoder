@@ -2,6 +2,7 @@ using System.CommandLine;
 using System.Runtime.InteropServices;
 using FluxEncoder.Cli.Commands;
 using FluxEncoder.Cli.Hosting;
+using FluxEncoder.Cli.Rendering;
 using FluxEncoder.Core.Results;
 using FluxEncoder.Infrastructure.Configuration;
 
@@ -126,8 +127,8 @@ public static class CliApplication
                 await host.Error.WriteAsync("\u001b[?25h").ConfigureAwait(false);
             }
 
-            await host.Error.WriteLineAsync($"Internal error: {ex.Message}").ConfigureAwait(false);
-            await host.Error.WriteLineAsync(ex.ToString()).ConfigureAwait(false);
+            await host.Error.WriteLineAsync(TerminalText.Clean($"Internal error: {ex.Message}")).ConfigureAwait(false);
+            await host.Error.WriteLineAsync(TerminalText.Clean(ex.ToString())).ConfigureAwait(false);
             return (int)ExitCode.GeneralFailure;
         }
     }
@@ -136,7 +137,7 @@ public static class CliApplication
     {
         foreach (var message in messages)
         {
-            await host.Error.WriteLineAsync(message).ConfigureAwait(false);
+            await host.Error.WriteLineAsync(TerminalText.Clean(message)).ConfigureAwait(false);
         }
 
         await host.Error.WriteLineAsync("Run with --help for usage.").ConfigureAwait(false);

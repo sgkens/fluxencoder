@@ -1,3 +1,4 @@
+using FluxEncoder.Infrastructure.Secrets;
 using FluxEncoder.Infrastructure.Storage;
 
 namespace FluxEncoder.Cli.Hosting;
@@ -23,4 +24,14 @@ internal sealed record CliHost(TextWriter Out, TextWriter Error, Func<string, st
     /// Where settings and history live. Tests point this at a temporary folder so they never touch the user's files.
     /// </summary>
     public AppPaths Paths { get; init; } = AppPaths.Current;
+
+    /// <summary>
+    /// Standard input, read only for <c>remote add --password-stdin</c>.
+    /// </summary>
+    public TextReader In { get; init; } = System.Console.In;
+
+    /// <summary>
+    /// The platform credential store. Tests substitute an in-memory one so they never touch a real keyring.
+    /// </summary>
+    public Func<ISecretStore> SecretStore { get; init; } = SecretStores.Platform;
 }

@@ -29,6 +29,7 @@ public static class CliApplication
             EncodeCommand.Build(host, session),
             ConfigCommand.Build(host),
             HistoryCommand.Build(host),
+            RemoteCommand.Build(host),
         };
 
         return root;

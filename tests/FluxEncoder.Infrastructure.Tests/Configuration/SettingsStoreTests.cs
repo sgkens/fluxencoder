@@ -182,4 +182,24 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.Equal(Core.Security.SourcePolicy.Default, settings.Security);
         Assert.Equal(Core.Security.ResourceLimits.None, settings.Limits);
     }
+
+    [Fact]
+    public void Remotes_ParseRoundTripAndNeverHoldPasswords()
+    {
+        var (settings, warnings) = LoadText("""
+            { "remotes": {
+                "nas": { "url": "sftp://jane@nas.local:2222/media" },
+                "leaky": { "url": "ftp://bob:hunter2@files/x" },
+                "broken": { "address": "x" } } }
+            """);
+
+        Assert.Equal(["nas"], settings.Remotes.Keys);
+        Assert.Contains(warnings, w => w.Contains("remotes.leaky", StringComparison.Ordinal) && w.Contains("password", StringComparison.Ordinal));
+        Assert.DoesNotContain(warnings, w => w.Contains("hunter2", StringComparison.Ordinal));
+        Assert.Contains(warnings, w => w.Contains("remotes.broken", StringComparison.Ordinal));
+
+        SettingsStore.Save(File(), settings);
+        Assert.Equal(settings, SettingsStore.Load(File()).Settings);
+        Assert.Contains("sftp://jane@nas.local:2222/media", System.IO.File.ReadAllText(File()), StringComparison.Ordinal);
+    }
 }

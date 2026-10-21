@@ -24,7 +24,7 @@ namespace FluxEncoder.Infrastructure.Configuration;
 /// </remarks>
 public static class SettingsStore
 {
-    private static readonly string[] TopLevelKeys = ["schemaVersion", "encode", "presets", "history", "security", "limits"];
+    private static readonly string[] TopLevelKeys = ["schemaVersion", "encode", "presets", "history", "security", "limits", "remotes"];
 
     public static (FluxSettings Settings, IReadOnlyList<string> Warnings) Load(string path)
     {
@@ -84,6 +84,7 @@ public static class SettingsStore
                 History = root.TryGetProperty("history", out var history) ? ReadHistory(history, name, warnings) : HistorySettings.Default,
                 Security = root.TryGetProperty("security", out var security) ? ReadSecurity(security, name, warnings) : SourcePolicy.Default,
                 Limits = root.TryGetProperty("limits", out var limits) ? ReadLimits(limits, name, warnings) : ResourceLimits.None,
+                Remotes = root.TryGetProperty("remotes", out var remotes) ? ReadRemotes(remotes, name, warnings) : FluxSettings.Default.Remotes,
             };
 
             return (settings, warnings);
@@ -194,6 +195,16 @@ public static class SettingsStore
             WriteNullableNumber(writer, "maxInputMB", limits.MaxInputBytes / (1024 * 1024));
             WriteNullableNumber(writer, "maxOutputMB", limits.MaxOutputBytes / (1024 * 1024));
             WriteNullableNumber(writer, "threads", limits.Threads);
+            writer.WriteEndObject();
+
+            writer.WriteStartObject("remotes");
+            foreach (var (alias, mount) in settings.Remotes.OrderBy(r => r.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                writer.WriteStartObject(alias);
+                writer.WriteString("url", mount.ToDisplayUrl());
+                writer.WriteEndObject();
+            }
+
             writer.WriteEndObject();
 
             writer.WriteEndObject();
@@ -311,6 +322,38 @@ public static class SettingsStore
             AllowedSchemes = schemes,
             AllowedRoots = roots,
         };
+    }
+
+    private static ImmutableDictionary<string, RemoteMount> ReadRemotes(JsonElement element, string file, List<string> warnings)
+    {
+        var builder = ImmutableDictionary.CreateBuilder<string, RemoteMount>(StringComparer.OrdinalIgnoreCase);
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            warnings.Add($"{file}: remotes must be an object of named remotes; ignored.");
+            return builder.ToImmutable();
+        }
+
+        foreach (var remote in element.EnumerateObject())
+        {
+            if (remote.Value.ValueKind != JsonValueKind.Object
+                || !remote.Value.TryGetProperty("url", out var url)
+                || url.ValueKind != JsonValueKind.String)
+            {
+                warnings.Add($"{file}: remotes.{remote.Name} needs a \"url\" string; ignored.");
+                continue;
+            }
+
+            var (mount, error) = RemoteMount.Parse(remote.Name, url.GetString()!);
+            if (mount is null)
+            {
+                warnings.Add($"{file}: remotes.{remote.Name}: {error} Ignored.");
+                continue;
+            }
+
+            builder[remote.Name] = mount;
+        }
+
+        return builder.ToImmutable();
     }
 
     private static ResourceLimits ReadLimits(JsonElement element, string file, List<string> warnings)

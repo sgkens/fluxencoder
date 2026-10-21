@@ -1,4 +1,5 @@
 using FluxEncoder.Core.Hardware;
+using FluxEncoder.Core.Security;
 using FluxEncoder.Core.Tooling;
 
 namespace FluxEncoder.Core.Planning;
@@ -34,4 +35,9 @@ public sealed record PlanningContext
     /// Full output paths already claimed by earlier items of the same batch.
     /// </summary>
     public IReadOnlySet<string> ReservedOutputs { get; init; } = new HashSet<string>();
+
+    /// <summary>
+    /// Which inputs and locations are allowed, and how inputs are opened (TSKE010.2).
+    /// </summary>
+    public SourcePolicy Policy { get; init; } = SourcePolicy.Default;
 }

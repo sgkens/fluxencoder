@@ -14,6 +14,7 @@ public static class FFmpegFailureClassifier
 {
     private static readonly (FailureCategory Category, string[] Markers)[] Rules =
     [
+        (FailureCategory.PolicyDenied, ["not on whitelist"]),
         (FailureCategory.InsufficientSpace, ["No space left on device", "Disk quota exceeded"]),
         (FailureCategory.OutputExists, ["already exists. Exiting", "Not overwriting - exiting"]),
         (FailureCategory.HardwareUnavailable,

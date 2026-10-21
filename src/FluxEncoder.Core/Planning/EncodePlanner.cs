@@ -2,6 +2,7 @@ using System.Globalization;
 using FluxEncoder.Core.Encoding;
 using FluxEncoder.Core.Media;
 using FluxEncoder.Core.Results;
+using FluxEncoder.Core.Security;
 
 namespace FluxEncoder.Core.Planning;
 
@@ -39,6 +40,11 @@ public static class EncodePlanner
         ArgumentNullException.ThrowIfNull(context);
 
         var warnings = new List<JobWarning>();
+
+        if (context.Policy.CheckInput(input.Source, context.FileSystem.GetFullPath) is { } denied)
+        {
+            return denied;
+        }
 
         var profile = ContainerProfile.ForPath(job.OutputPath);
         if (profile is null)
@@ -136,7 +142,7 @@ public static class EncodePlanner
         var passLog = scratch is null ? null : Path.Combine(scratch, "pass");
 
         var transcodesVideo = input.IsProbed ? streams.Any(s => s.IsMotionVideo && !s.IsCopy) : job.Video is VideoTarget.Encode;
-        var head = InputArguments(input, seek, length, exactCut: !streams.Any(s => s.IsMotionVideo && s.IsCopy), transcodesVideo ? context.Hardware.DecodeArguments : []);
+        var head = InputArguments(input, seek, length, exactCut: !streams.Any(s => s.IsMotionVideo && s.IsCopy), transcodesVideo ? context.Hardware.DecodeArguments : [], context.FileSystem.GetFullPath);
         var invocations = new List<FFmpegInvocation>();
 
         if (twoPass)
@@ -255,7 +261,7 @@ public static class EncodePlanner
     /// pre-roll, for example); the output-side seek drops them so every stream starts at the cut. Not used when the
     /// video itself is copied, where dropping those packets would remove the keyframe the first frames depend on.
     /// </param>
-    private static List<string> InputArguments(PlanningInput input, TimeSpan seek, TimeSpan? length, bool exactCut, IReadOnlyList<string> decode)
+    private static List<string> InputArguments(PlanningInput input, TimeSpan seek, TimeSpan? length, bool exactCut, IReadOnlyList<string> decode, Func<string, string> fullPath)
     {
         var arguments = new List<string>(decode);
 
@@ -269,7 +275,7 @@ public static class EncodePlanner
             arguments.AddRange(["-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "30"]);
         }
 
-        arguments.AddRange(["-i", input.Source.Value]);
+        arguments.AddRange(SourcePolicy.FFmpegInput(input.Source, fullPath));
 
         if (seek > TimeSpan.Zero && exactCut)
         {

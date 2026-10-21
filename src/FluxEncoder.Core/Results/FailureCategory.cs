@@ -41,4 +41,9 @@ public enum FailureCategory
     Timeout,
 
     Cancelled,
+
+    /// <summary>
+    /// The source policy forbids this input, protocol, or location (TSKE010.2).
+    /// </summary>
+    PolicyDenied,
 }

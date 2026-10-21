@@ -175,4 +175,23 @@ public sealed class MediaProberTests : IAsyncLifetime
         Assert.Equal(["-i", "https://example.com/a.mp4"], arguments.TakeLast(2));
         Assert.DoesNotContain("-rw_timeout", MediaProber.MediaArguments(InputSource.Classify("a.mkv")));
     }
+
+    [Fact]
+    public void ProtocolLikeFileName_IsProbedAsAbsoluteLocalPath()
+    {
+        // FFmpeg would open a relative "http:evil.mkv" as an HTTP URL to the host "evil.mkv".
+        var arguments = MediaProber.MediaArguments(InputSource.Classify("http:evil.mkv"));
+
+        Assert.Equal(["-protocol_whitelist", "file,crypto,data", "-i", Path.GetFullPath("http:evil.mkv")], arguments.TakeLast(4));
+    }
+
+    [Fact]
+    public async Task DeniedScheme_IsRefusedWithoutRunningFFprobe()
+    {
+        var policy = Core.Security.SourcePolicy.Default with { AllowedSchemes = ["https"] };
+
+        var result = await MediaProber.ProbeAsync("/nonexistent/ffprobe", "http://127.0.0.1:9/x.ts", Token, policy);
+
+        Assert.Equal(FailureCategory.PolicyDenied, result.Failure?.Category);
+    }
 }

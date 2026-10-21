@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Globalization;
 using FluxEncoder.Core.Media;
 using FluxEncoder.Core.Results;
+using FluxEncoder.Core.Security;
 using FluxEncoder.Infrastructure.Processes;
 
 namespace FluxEncoder.Infrastructure.Probing;
@@ -42,12 +43,17 @@ public static class MediaProber
     public static async Task<Result<ProbedInput>> ProbeAsync(
         string ffprobePath,
         string input,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        SourcePolicy? policy = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(ffprobePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(input);
 
         var source = InputSource.Classify(input);
+        if ((policy ?? SourcePolicy.Default).CheckInput(source, Path.GetFullPath) is { } denied)
+        {
+            return denied;
+        }
 
         if (!source.CanProbe)
         {
@@ -114,8 +120,9 @@ public static class MediaProber
             arguments.AddRange(["-rw_timeout", microseconds.ToString(CultureInfo.InvariantCulture)]);
         }
 
-        // -i keeps an input that starts with '-' from being read as an option.
-        arguments.AddRange(["-i", source.Value]);
+        // -i keeps an input that starts with '-' from being read as an option; the policy adds the protocol
+        // whitelist and passes local files as absolute paths so their names are never read as protocols.
+        arguments.AddRange(SourcePolicy.FFmpegInput(source, Path.GetFullPath));
         return arguments;
     }
 
@@ -187,7 +194,7 @@ public static class MediaProber
             output = await ProcessCapture.RunAsync(
                 ffprobePath,
                 ["-v", "error", "-hide_banner", "-print_format", "json", "-select_streams", target.Index.ToString(CultureInfo.InvariantCulture),
-                 "-show_frames", "-read_intervals", "%+#1", "-show_entries", "frame=side_data_list", "-i", source.Value],
+                 "-show_frames", "-read_intervals", "%+#1", "-show_entries", "frame=side_data_list", .. SourcePolicy.FFmpegInput(source, Path.GetFullPath)],
                 LocalTimeout,
                 cancellationToken).ConfigureAwait(false);
         }

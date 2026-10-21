@@ -24,7 +24,7 @@ public sealed class TrimAndTwoPassTests
     {
         var planned = Plan(Trimmed(new TrimRange(start: Minute, end: 3 * Minute))).Value!;
 
-        Assert.Equal(["-ss", "60", "-i", "/media/movie.mkv", "-ss", "0", "-t", "120"], Head(planned, 8));
+        Assert.Equal(["-ss", "60", "-protocol_whitelist", "file,crypto,data", "-i", "/media/movie.mkv", "-ss", "0", "-t", "120"], Head(planned, 10));
         Assert.Equal(new InputTimeline.Finite(2 * Minute), planned.Timeline);
     }
 
@@ -33,7 +33,7 @@ public sealed class TrimAndTwoPassTests
     {
         var planned = Plan(Trimmed(new TrimRange(start: TimeSpan.FromSeconds(90.5), duration: TimeSpan.FromSeconds(30)))).Value!;
 
-        Assert.Equal(["-ss", "90.5", "-i", "/media/movie.mkv", "-ss", "0", "-t", "30"], Head(planned, 8));
+        Assert.Equal(["-ss", "90.5", "-protocol_whitelist", "file,crypto,data", "-i", "/media/movie.mkv", "-ss", "0", "-t", "30"], Head(planned, 10));
     }
 
     [Fact]
@@ -41,7 +41,7 @@ public sealed class TrimAndTwoPassTests
     {
         var planned = Plan(Trimmed(new TrimRange(start: 90 * Minute))).Value!;
 
-        Assert.Equal(["-ss", "5400", "-i", "/media/movie.mkv", "-ss", "0", "-map"], Head(planned, 7));
+        Assert.Equal(["-ss", "5400", "-protocol_whitelist", "file,crypto,data", "-i", "/media/movie.mkv", "-ss", "0", "-map"], Head(planned, 9));
         Assert.Equal(new InputTimeline.Finite(10 * Minute), planned.Timeline);
     }
 
@@ -50,7 +50,7 @@ public sealed class TrimAndTwoPassTests
     {
         var planned = Plan(Trimmed(new TrimRange(end: 5 * Minute))).Value!;
 
-        Assert.Equal(["-i", "/media/movie.mkv", "-t", "300"], Head(planned, 4));
+        Assert.Equal(["-protocol_whitelist", "file,crypto,data", "-i", "/media/movie.mkv", "-t", "300"], Head(planned, 6));
     }
 
     [Fact]
@@ -66,7 +66,7 @@ public sealed class TrimAndTwoPassTests
     {
         var planned = Plan(Trimmed(new TrimRange(start: 95 * Minute, end: 120 * Minute))).Value!;
 
-        Assert.Equal(["-ss", "5700", "-i", "/media/movie.mkv", "-ss", "0", "-t", "300"], Head(planned, 8));
+        Assert.Equal(["-ss", "5700", "-protocol_whitelist", "file,crypto,data", "-i", "/media/movie.mkv", "-ss", "0", "-t", "300"], Head(planned, 10));
         Assert.Contains(planned.Warnings, w => w.Code == WarningCodes.TrimEndBeyondInput);
     }
 
@@ -76,7 +76,7 @@ public sealed class TrimAndTwoPassTests
         var planned = Plan(Trimmed(new TrimRange(start: Minute), new VideoTarget.StreamCopy())).Value!;
 
         Assert.Contains(planned.Warnings, w => w.Code == WarningCodes.TrimKeyframeAligned);
-        Assert.Equal(["-ss", "60", "-i", "/media/movie.mkv", "-map"], Head(planned, 5));
+        Assert.Equal(["-ss", "60", "-protocol_whitelist", "file,crypto,data", "-i", "/media/movie.mkv", "-map"], Head(planned, 7));
     }
 
     [Fact]
@@ -86,7 +86,7 @@ public sealed class TrimAndTwoPassTests
         var input = new PlanningInput(InputSource.Classify(live.Source), live);
 
         var limited = Plan(Trimmed(new TrimRange(duration: 10 * Minute)), input).Value!;
-        Assert.Equal(["-i", "rtmp://live/app", "-t", "600"], Head(limited, 4));
+        Assert.Equal(["-protocol_whitelist", "rtmp,rtmps,rtmpt,rtmpts,rtmpe,rtmpte,tcp,tls,http,https", "-i", "rtmp://live/app", "-t", "600"], Head(limited, 6));
         Assert.IsType<InputTimeline.Unbounded>(limited.Timeline);
 
         Assert.Equal(FailureCategory.InvalidUsage, Plan(Trimmed(new TrimRange(start: Minute)), input).Failure?.Category);
@@ -117,7 +117,7 @@ public sealed class TrimAndTwoPassTests
 
         Assert.Equal(
         [
-            "-i", "/media/movie.mkv",
+            "-protocol_whitelist", "file,crypto,data", "-i", "/media/movie.mkv",
             "-map", "0:0",
             "-c:v:0", "libx264", "-preset:v:0", "medium", "-b:v:0", "4000k", "-pix_fmt:v:0", "yuv420p",
             "-color_range:v:0", "tv", "-color_primaries:v:0", "bt2020", "-color_trc:v:0", "smpte2084", "-colorspace:v:0", "bt2020nc",

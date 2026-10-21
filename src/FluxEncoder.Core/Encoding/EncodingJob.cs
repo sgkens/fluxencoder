@@ -73,6 +73,12 @@ public sealed record EncodingJob
     }
 
     /// <summary>
+    /// With a forced <see cref="Hardware"/> vendor, encode on the CPU if that vendor is unusable instead of failing.
+    /// Automatic selection always falls back.
+    /// </summary>
+    public bool HardwareFallback { get; init; }
+
+    /// <summary>
     /// The part of the input to encode, or <see langword="null"/> for all of it.
     /// </summary>
     public TrimRange? Trim { get; init; }

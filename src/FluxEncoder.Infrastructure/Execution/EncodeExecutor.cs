@@ -124,8 +124,10 @@ public static class EncodeExecutor
                 ? null
                 : new SynchronousProgress<EncodeProgress>(report =>
                 {
+                    // From processed media time only: FFmpeg also sends its final report when stopped early, so
+                    // "final" does not mean "complete".
                     var passFraction = timeline.Fraction(report.ProcessedTime ?? TimeSpan.Zero);
-                    var overall = passFraction is { } f ? (index + (report.IsFinal ? 1.0 : f)) / passCount : (double?)null;
+                    var overall = passFraction is { } f ? (index + f) / passCount : (double?)null;
                     progress.Report(new JobProgress(pass, passCount, report, overall, attempt));
                 });
 

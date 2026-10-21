@@ -23,39 +23,19 @@ public static class EncodeOrchestrator
         IProgress<JobProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(job);
-        ArgumentNullException.ThrowIfNull(environment);
-
-        var probed = await MediaProber.ProbeAsync(environment.FFprobePath, job.InputPath, cancellationToken).ConfigureAwait(false);
-        if (!probed.IsSuccess)
+        var prepared = await PrepareAsync(job, environment, cancellationToken).ConfigureAwait(false);
+        if (prepared.Failure is { } failure)
         {
-            return new EncodeOutcome(JobResult.Failed(job.OutputPath, probed.Failure), null, null, []);
+            return new EncodeOutcome(JobResult.Failed(job.OutputPath, failure, prepared.Warnings), null, null, prepared.Probes);
         }
 
-        var input = probed.Value;
-        var warnings = new List<JobWarning>(input.Warnings);
-        var registry = environment.Registry;
+        var warnings = new List<JobWarning>(prepared.Warnings);
+        var strategy = prepared.Selection!.Strategy;
 
-        IReadOnlyList<EncoderProbe> probes = [];
-        if (job.Video is VideoTarget.Encode encode)
-        {
-            var candidates = HardwareSelector.StrategiesToProbe(job, input.Media, registry, environment.Capabilities.HasEncoder);
-            probes = await EncoderProber.ProbeAllAsync(environment.FFmpegPath, candidates, encode.Codec, environment.Capabilities, cancellationToken).ConfigureAwait(false);
-        }
-
-        var selection = HardwareSelector.Select(job, input.Media, registry, probes);
-        if (!selection.IsSuccess)
-        {
-            return new EncodeOutcome(JobResult.Failed(job.OutputPath, selection.Failure, warnings), null, null, probes);
-        }
-
-        warnings.AddRange(selection.Value.Warnings);
-        var strategy = selection.Value.Strategy;
-
-        var (result, planned) = await PlanAndExecuteAsync(job, input, environment, strategy, progress, cancellationToken).ConfigureAwait(false);
+        var (result, planned) = await PlanAndExecuteAsync(job, prepared.Input!, environment, strategy, progress, cancellationToken).ConfigureAwait(false);
 
         if (result.Failure is { Category: FailureCategory.HardwareUnavailable } hardwareFailure
-            && selection.Value.FallbackAllowed
+            && prepared.Selection.FallbackAllowed
             && strategy.Vendor != HardwareVendor.Cpu)
         {
             warnings.AddRange(result.Warnings);
@@ -63,11 +43,65 @@ public static class EncodeOrchestrator
                 WarningCodes.HardwareFallback,
                 $"{strategy.DisplayName} failed during the encode ({hardwareFailure.Message}); encoding on the CPU instead."));
 
-            strategy = registry.Cpu;
-            (result, planned) = await PlanAndExecuteAsync(job, input, environment, strategy, progress, cancellationToken).ConfigureAwait(false);
+            strategy = environment.Registry.Cpu;
+            (result, planned) = await PlanAndExecuteAsync(job, prepared.Input!, environment, strategy, progress, cancellationToken).ConfigureAwait(false);
         }
 
-        return new EncodeOutcome(result.WithEarlierWarnings(warnings), planned, strategy, probes);
+        return new EncodeOutcome(result.WithEarlierWarnings(warnings), planned, strategy, prepared.Probes);
+    }
+
+    /// <summary>
+    /// Everything <see cref="RunAsync"/> does before executing: probe, select hardware, and plan. Used by
+    /// <c>--dry-run</c>, so the plan shown is exactly the one that would run.
+    /// </summary>
+    /// <returns>The plan (or the failure that prevented it), with input and hardware warnings merged in front.</returns>
+    public static async Task<(Result<PlannedJob> Planned, IHardwareStrategy? Strategy, IReadOnlyList<EncoderProbe> Probes, IReadOnlyList<JobWarning> Warnings)> PlanAsync(
+        EncodingJob job,
+        EncodeEnvironment environment,
+        CancellationToken cancellationToken = default)
+    {
+        var prepared = await PrepareAsync(job, environment, cancellationToken).ConfigureAwait(false);
+        if (prepared.Failure is { } failure)
+        {
+            return (failure, null, prepared.Probes, prepared.Warnings);
+        }
+
+        var strategy = prepared.Selection!.Strategy;
+        var planned = EncodePlanner.Plan(job, prepared.Input!.ToPlanningInput(), environment.PlanningContext(strategy));
+        return (planned, strategy, prepared.Probes, prepared.Warnings);
+    }
+
+    private sealed record Prepared(ProbedInput? Input, HardwareSelection? Selection, IReadOnlyList<EncoderProbe> Probes, IReadOnlyList<JobWarning> Warnings, JobFailure? Failure);
+
+    private static async Task<Prepared> PrepareAsync(EncodingJob job, EncodeEnvironment environment, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(job);
+        ArgumentNullException.ThrowIfNull(environment);
+
+        var probed = await MediaProber.ProbeAsync(environment.FFprobePath, job.InputPath, cancellationToken).ConfigureAwait(false);
+        if (!probed.IsSuccess)
+        {
+            return new Prepared(null, null, [], [], probed.Failure);
+        }
+
+        var input = probed.Value;
+        var warnings = new List<JobWarning>(input.Warnings);
+
+        IReadOnlyList<EncoderProbe> probes = [];
+        if (job.Video is VideoTarget.Encode encode)
+        {
+            var candidates = HardwareSelector.StrategiesToProbe(job, input.Media, environment.Registry, environment.Capabilities.HasEncoder);
+            probes = await EncoderProber.ProbeAllAsync(environment.FFmpegPath, candidates, encode.Codec, environment.Capabilities, cancellationToken).ConfigureAwait(false);
+        }
+
+        var selection = HardwareSelector.Select(job, input.Media, environment.Registry, probes);
+        if (!selection.IsSuccess)
+        {
+            return new Prepared(input, null, probes, warnings, selection.Failure);
+        }
+
+        warnings.AddRange(selection.Value.Warnings);
+        return new Prepared(input, selection.Value, probes, warnings, null);
     }
 
     private static async Task<(JobResult Result, PlannedJob? Planned)> PlanAndExecuteAsync(

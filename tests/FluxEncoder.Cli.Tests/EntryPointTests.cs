@@ -37,4 +37,22 @@ public sealed class EntryPointTests
 
         Assert.NotEqual(0, exitCode);
     }
+
+    [Fact]
+    public void RootCommand_RegistersOnlyImplementedCommandsAndNoneHidden()
+    {
+        var root = CliApplication.BuildRootCommand();
+
+        Assert.Equal(["encode"], root.Subcommands.Select(c => c.Name));
+        Assert.All(root.Subcommands, c => Assert.False(c.Hidden));
+    }
+
+    [Fact]
+    public void BuildingTwice_DoesNotShareOptionState()
+    {
+        var first = CliApplication.BuildRootCommand().Subcommands.Single();
+        var second = CliApplication.BuildRootCommand().Subcommands.Single();
+
+        Assert.NotSame(first.Options[0], second.Options[0]);
+    }
 }

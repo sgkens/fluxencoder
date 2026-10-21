@@ -72,7 +72,7 @@ public sealed class EncodeExecutorTests : IDisposable
         Assert.False(File.Exists(Temporary(final)));
         Assert.Equal(1, result.Attempts);
         Assert.True(result.Elapsed > TimeSpan.Zero);
-        Assert.Equal(1.0, collector.Reports.Last().Fraction);
+        Assert.InRange(collector.Reports.Last().Fraction!.Value, 0.9, 1.0);
         Assert.All(collector.Reports, r => Assert.InRange(r.Fraction!.Value, 0.0, 1.0));
     }
 

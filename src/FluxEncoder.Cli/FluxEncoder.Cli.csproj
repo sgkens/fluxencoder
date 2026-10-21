@@ -12,4 +12,8 @@
     <ProjectReference Include="../FluxEncoder.Core/FluxEncoder.Core.csproj" />
     <ProjectReference Include="../FluxEncoder.Infrastructure/FluxEncoder.Infrastructure.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="FluxEncoder.Cli.Tests" />
+  </ItemGroup>
 </Project>

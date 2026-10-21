@@ -35,4 +35,14 @@ public static class WarningCodes
     /// The input is a pipe and was not probed, so stream selection cannot be applied in advance.
     /// </summary>
     public const string InputNotProbed = "input-not-probed";
+
+    /// <summary>
+    /// A failed or cancelled job's temporary output was kept, as requested by the partial-output policy.
+    /// </summary>
+    public const string PartialOutputKept = "partial-output-kept";
+
+    /// <summary>
+    /// A temporary file or scratch directory could not be removed.
+    /// </summary>
+    public const string CleanupFailed = "cleanup-failed";
 }

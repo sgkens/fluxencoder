@@ -1,6 +1,7 @@
 using FluxEncoder.Core.Media;
 using FluxEncoder.Core.Results;
 using FluxEncoder.Core.Tooling;
+using FluxEncoder.Infrastructure.Probing;
 using FluxEncoder.Infrastructure.Tooling;
 using FluxEncoder.Infrastructure.Tests.Support;
 
@@ -79,6 +80,22 @@ public sealed class FFmpegCapabilityTests
         Assert.Contains(caps.Muxers, m => m.Name == "matroska");
         Assert.Contains(caps.Muxers, m => m.Name == "mp4");
         Assert.DoesNotContain(caps.Muxers, m => m.Names.Any(n => n.Contains(' ')));
+    }
+
+    [Fact]
+    public void ProbedFormatNames_ResolveAgainstDemuxerCatalog()
+    {
+        var caps = Fixture801();
+        var mkv = FFprobeJsonParser.Parse(Fixture.Read("ffprobe", "hdr10-multitrack.mkv.json"), "a.mkv");
+        var mp4 = FFprobeJsonParser.Parse(Fixture.Read("ffprobe", "hlg-coverart.mp4.json"), "a.mp4");
+
+        Assert.True(caps.Demuxers.TryFind(string.Join(',', mkv.FormatNames), out var mkvEntry));
+        Assert.Equal("matroska", mkvEntry.Name);
+        Assert.True(caps.Demuxers.AreSameFormat(mp4.FormatNames[1], "mov"));
+
+        // Muxers list matroska and webm separately, unlike the demuxer.
+        Assert.False(caps.Muxers.AreSameFormat("matroska", "webm"));
+        Assert.True(caps.Muxers.Contains("webm"));
     }
 
     [Fact]

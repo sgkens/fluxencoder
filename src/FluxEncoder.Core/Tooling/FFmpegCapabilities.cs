@@ -24,9 +24,9 @@ public sealed record FFmpegCapabilities
 
     public FrozenDictionary<string, CodecImplementation> Decoders { get; init; } = FrozenDictionary<string, CodecImplementation>.Empty;
 
-    public ImmutableArray<FormatEntry> Muxers { get; init; } = [];
+    public FormatCatalog Muxers { get; init; } = FormatCatalog.Empty;
 
-    public ImmutableArray<FormatEntry> Demuxers { get; init; } = [];
+    public FormatCatalog Demuxers { get; init; } = FormatCatalog.Empty;
 
     public FrozenSet<string> InputProtocols { get; init; } = FrozenSet<string>.Empty;
 

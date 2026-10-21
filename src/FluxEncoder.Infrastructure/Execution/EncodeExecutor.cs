@@ -49,6 +49,12 @@ public static class EncodeExecutor
                 attempt++;
                 DeleteTemporary(plan, warnings);
 
+                if (PrepareDirectories(plan) is { } prepareFailure)
+                {
+                    failure = prepareFailure;
+                    break;
+                }
+
                 var outcome = await RunPassesAsync(ffmpegPath, plan, timeline, attempt, progress, options, cancellationToken).ConfigureAwait(false);
 
                 failure = outcome.Failure ?? PlaceOutput(plan, policy);
@@ -145,6 +151,33 @@ public static class EncodeExecutor
         }
 
         return new PassOutcome(null, StoppedByUser: false);
+    }
+
+    /// <summary>
+    /// Creates the output directory (the planner allows missing ones) and the scratch directory for pass logs.
+    /// </summary>
+    private static JobFailure? PrepareDirectories(OutputPlan plan)
+    {
+        var outputDirectory = Path.GetDirectoryName(plan.TemporaryOutputPath ?? plan.FinalOutputPath);
+
+        try
+        {
+            if (!string.IsNullOrEmpty(outputDirectory))
+            {
+                Directory.CreateDirectory(outputDirectory);
+            }
+
+            if (plan.ScratchDirectory is { } scratch)
+            {
+                Directory.CreateDirectory(scratch);
+            }
+
+            return null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new JobFailure(FailureCategory.OutputNotWritable, $"Could not create '{outputDirectory}'.") { Detail = ex.Message };
+        }
     }
 
     private static JobFailure? PlaceOutput(OutputPlan plan, JobPolicy policy)

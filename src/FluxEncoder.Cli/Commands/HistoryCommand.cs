@@ -44,7 +44,7 @@ internal static class HistoryCommand
                 return (int)ExitCode.GeneralFailure;
             }
 
-            await host.Out.WriteAsync(result.GetValue(json) ? Json(runs) : Table(runs)).ConfigureAwait(false);
+            await host.Out.WriteAsync(result.GetValue(json) ? Json(runs) : Rendering.TerminalText.Safe(Table(runs))).ConfigureAwait(false);
             return (int)ExitCode.Success;
         });
 

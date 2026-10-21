@@ -5,7 +5,7 @@ public static class FailureCategoryExtensions
     public static ExitCode ToExitCode(this FailureCategory category) => category switch
     {
         FailureCategory.Internal => ExitCode.GeneralFailure,
-        FailureCategory.InvalidUsage => ExitCode.InvalidUsage,
+        FailureCategory.InvalidUsage or FailureCategory.PolicyDenied => ExitCode.InvalidUsage,
         FailureCategory.InputNotFound or FailureCategory.InvalidInput or FailureCategory.NetworkError
             => ExitCode.InputError,
         FailureCategory.OutputExists or FailureCategory.OutputNotWritable or FailureCategory.InsufficientSpace

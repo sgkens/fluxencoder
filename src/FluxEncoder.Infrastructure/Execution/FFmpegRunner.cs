@@ -81,6 +81,13 @@ public static class FFmpegRunner
             ? WatchForStallAsync(monitor, stall, stop, watchdogCancellation.Token)
             : Task.CompletedTask;
 
+        if (options.MaxRunTime is { } maxRunTime)
+        {
+            // A ceiling for service use: the same graceful stop as a stall, reported as one.
+            _ = Task.Delay(maxRunTime, watchdogCancellation.Token)
+                .ContinueWith(_ => stop.TrySetResult(RunTermination.Stalled), CancellationToken.None, TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default);
+        }
+
         var exitTask = process.WaitForExitAsync(CancellationToken.None);
         var termination = RunTermination.Exited;
         var killed = false;
@@ -100,11 +107,9 @@ public static class FFmpegRunner
         await stdoutTask.ConfigureAwait(false);
         var stderr = await stderrTask.ConfigureAwait(false);
 
-        // A stop requested in the same instant FFmpeg finished on its own is still a normal exit.
-        if (termination != RunTermination.Exited && !killed && process.ExitCode == 0 && monitor.Last?.IsFinal == true && !cancellationToken.IsCancellationRequested)
-        {
-            termination = RunTermination.Exited;
-        }
+        // No "finished on its own anyway" reclassification: after q FFmpeg always ends with a final progress block
+        // and exit code 0, so that test would turn every cooperative stop (stall, run-time limit) into a success and
+        // promote a truncated output.
 
         return Result<FFmpegRunResult>.Success(
             new FFmpegRunResult(process.ExitCode, termination, killed, stderr, monitor.Last, stopwatch.Elapsed));

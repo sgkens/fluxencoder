@@ -40,12 +40,14 @@ public sealed class ConcatAndThumbnailPlannerTests
         var plan = planned.Plan!;
 
         Assert.Equal(
-            ["-f", "concat", "-safe", "0", "-i", "/tmp/flux-tok1/inputs.ffconcat", "-map", "0:v:0", "-map", "0:a:0?", "-c", "copy", "-n", "-f", "matroska", "/media/out/.joined.tok1.partial.mkv"],
+            ["-f", "concat", "-safe", "0", "-protocol_whitelist", "file,crypto,data", "-i", "/tmp/flux-tok1/inputs.ffconcat", "-map", "0:v:0", "-map", "0:a:0?", "-c", "copy", "-n", "-f", "matroska", "/media/out/.joined.tok1.partial.mkv"],
             plan.Invocations.Single().Arguments);
         Assert.Equal("ffconcat version 1.0\nfile '/media/a.mkv'\nfile '/media/b.mkv'\n", plan.PreparedFiles["/tmp/flux-tok1/inputs.ffconcat"]);
         Assert.Equal(new InputTimeline.Finite(TimeSpan.FromSeconds(90)), planned.Timeline);
         Assert.Empty(planned.Warnings);
     }
+
+    private static string[] Local(string path) => ["-protocol_whitelist", "file,crypto,data", "-i", path];
 
     [Fact]
     public void ConcatList_EscapesQuotes()
@@ -72,7 +74,7 @@ public sealed class ConcatAndThumbnailPlannerTests
         var args = planned.Plan!.Invocations.Single().Arguments;
 
         Assert.Equal(WarningCodes.ConcatReencoded, Assert.Single(planned.Warnings).Code);
-        Assert.Equal(["-i", "/media/a.mkv", "-i", "/media/b.mkv", "-f", "lavfi", "-t", "12.5", "-i", "anullsrc=r=48000:cl=stereo"], args.Take(10));
+        Assert.Equal([.. Local("/media/a.mkv"), .. Local("/media/b.mkv"), "-f", "lavfi", "-t", "12.5", "-i", "anullsrc=r=48000:cl=stereo"], args.Take(14));
 
         var filter = args[args.IndexOf("-filter_complex") + 1];
         Assert.Equal(
@@ -142,7 +144,7 @@ public sealed class ConcatAndThumbnailPlannerTests
 
         Assert.Equal(
         [
-            "-ss", "10", "-i", "/media/a.mkv", "-map", "0:0",
+            "-ss", "10", "-protocol_whitelist", "file,crypto,data", "-i", "/media/a.mkv", "-map", "0:0",
             "-vf", "fps=1/10,scale=320:180,setsar=1,tile=4x3,format=yuvj420p",
             "-frames:v", "1", "-c:v", "mjpeg", "-q:v", "3", "-update", "1",
             "-n", "-f", "image2", "/media/out/.sheet.tok1.partial.jpg",
@@ -154,7 +156,7 @@ public sealed class ConcatAndThumbnailPlannerTests
     public void Thumbnails_ToneMapHdrWhenFiltersExist()
     {
         var withFilters = ThumbnailPlanner.Plan(Sheet("/media/out/sheet.png"), Input(), ThumbnailContext("zscale", "tonemap")).Value!;
-        Assert.Contains("tonemap=hable", withFilters.Plan!.Invocations.Single().Arguments[7], StringComparison.Ordinal);
+        Assert.Contains("tonemap=hable", withFilters.Plan!.Invocations.Single().Arguments[9], StringComparison.Ordinal);
         Assert.Equal(WarningCodes.ThumbnailsToneMapped, Assert.Single(withFilters.Warnings).Code);
 
         var without = ThumbnailPlanner.Plan(Sheet("/media/out/sheet.png"), Input(), ThumbnailContext()).Value!;

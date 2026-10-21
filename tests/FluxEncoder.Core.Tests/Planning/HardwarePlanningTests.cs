@@ -47,7 +47,7 @@ public sealed class HardwarePlanningTests
 
         Assert.Equal(
         [
-            "-hwaccel", "auto", "-i", "/media/clip.mkv",
+            "-hwaccel", "auto", "-protocol_whitelist", "file,crypto,data", "-i", "/media/clip.mkv",
             "-map", "0:0", "-map", "0:1",
             "-c:v:0", "hevc_amf",
             "-quality:v:0", "speed", "-rc:v:0", "cqp", "-qp_i:v:0", "28", "-qp_p:v:0", "28",

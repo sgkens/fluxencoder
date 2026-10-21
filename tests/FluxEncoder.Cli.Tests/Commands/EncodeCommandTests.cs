@@ -282,4 +282,18 @@ public sealed class EncodeCommandTests : IAsyncLifetime
         Assert.Equal(0, exitCode);
         Assert.Equal(expectEscapes, output.ToString().Contains('\u001b', StringComparison.Ordinal));
     }
+
+    [Fact]
+    public async Task HostileFileName_CannotInjectTerminalEscapes()
+    {
+        SkipWithoutFFmpeg();
+        var hostile = PathOf("evil\u001b]0;pwned\u0007\u001b[31m.mkv");
+        File.Copy(PathOf("clip.mkv"), hostile);
+
+        var run = await RunAsync("encode", hostile, "--codec", "copy", "-o", PathOf("safe.mkv"));
+
+        Assert.Equal(0, run.ExitCode);
+        Assert.DoesNotContain('\u001b', run.Out + run.Error);
+        Assert.Contains("evil?]0;pwned??[31m.mkv", run.Out, StringComparison.Ordinal);
+    }
 }

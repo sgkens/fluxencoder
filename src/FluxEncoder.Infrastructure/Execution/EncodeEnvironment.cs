@@ -1,5 +1,6 @@
 using FluxEncoder.Core.Hardware;
 using FluxEncoder.Core.Planning;
+using FluxEncoder.Core.Security;
 using FluxEncoder.Core.Tooling;
 
 namespace FluxEncoder.Infrastructure.Execution;
@@ -35,6 +36,13 @@ public sealed record EncodeEnvironment
 
     public FFmpegRunOptions RunOptions { get; init; } = FFmpegRunOptions.Default;
 
+    /// <summary>
+    /// Which inputs and locations are allowed (TSKE010.2).
+    /// </summary>
+    public SourcePolicy Policy { get; init; } = SourcePolicy.Default;
+
+    public ResourceLimits Limits { get; init; } = ResourceLimits.None;
+
     public PlanningContext PlanningContext(IHardwareStrategy strategy) => new()
     {
         Capabilities = Capabilities,
@@ -42,5 +50,7 @@ public sealed record EncodeEnvironment
         FileSystem = FileSystem,
         ScratchRoot = ScratchRoot,
         ReservedOutputs = ReservedOutputs,
+        Policy = Policy,
+        Limits = Limits,
     };
 }

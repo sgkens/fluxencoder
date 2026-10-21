@@ -4,6 +4,7 @@ using System.Text.Json;
 using FluxEncoder.Cli.Hosting;
 using FluxEncoder.Core.Encoding;
 using FluxEncoder.Core.Results;
+using FluxEncoder.Core.Security;
 
 namespace FluxEncoder.Cli.Rendering;
 
@@ -23,7 +24,8 @@ namespace FluxEncoder.Cli.Rendering;
 ///               "commands": [ [ "ffmpeg", "-i", ... ] ] } ]
 /// }
 /// </code>
-/// Category names are the <see cref="FailureCategory"/> names in kebab-case. Commands are redacted.
+/// Category names are the <see cref="FailureCategory"/> names in kebab-case. Every free-text value and command is
+/// passed through <see cref="Redaction.Text"/>.
 /// </remarks>
 internal sealed class JsonReporter(CliHost host) : IReporter
 {
@@ -86,8 +88,8 @@ internal sealed class JsonReporter(CliHost host) : IReporter
     {
         var result = report.Result;
         writer.WriteStartObject();
-        writer.WriteString("input", report.Input);
-        writer.WriteString("output", result.OutputPath);
+        writer.WriteString("input", Redaction.Text(report.Input));
+        writer.WriteString("output", Redaction.Text(result.OutputPath));
         writer.WriteString("outcome", Kebab(result.Outcome.ToString()));
         writer.WriteNumber("elapsedSeconds", Math.Round(result.Elapsed.TotalSeconds, 3));
         writer.WriteNumber("attempts", result.Attempts);
@@ -104,14 +106,14 @@ internal sealed class JsonReporter(CliHost host) : IReporter
             writer.WriteNullValue();
         }
 
-        WriteNullableString(writer, "skipReason", result.SkipReason);
+        WriteNullableString(writer, "skipReason", result.SkipReason is null ? null : Redaction.Text(result.SkipReason));
 
         writer.WriteStartArray("warnings");
         foreach (var warning in result.Warnings)
         {
             writer.WriteStartObject();
             writer.WriteString("code", warning.Code);
-            writer.WriteString("message", warning.Message);
+            writer.WriteString("message", Redaction.Text(warning.Message));
             writer.WriteEndObject();
         }
 
@@ -124,7 +126,7 @@ internal sealed class JsonReporter(CliHost host) : IReporter
             writer.WriteStringValue(_ffmpegPath);
             foreach (var argument in ArgumentRedactor.Redact(invocation.Arguments))
             {
-                writer.WriteStringValue(argument);
+                writer.WriteStringValue(Redaction.Text(argument));
             }
 
             writer.WriteEndArray();
@@ -139,8 +141,8 @@ internal sealed class JsonReporter(CliHost host) : IReporter
         writer.WriteStartObject();
         writer.WriteString("category", Kebab(failure.Category.ToString()));
         writer.WriteNumber("exitCode", (int)failure.ExitCode);
-        writer.WriteString("message", failure.Message);
-        WriteNullableString(writer, "detail", failure.Detail);
+        writer.WriteString("message", Redaction.Text(failure.Message));
+        WriteNullableString(writer, "detail", failure.Detail is null ? null : Redaction.Text(failure.Detail));
         writer.WriteEndObject();
     }
 
@@ -168,7 +170,7 @@ internal sealed class JsonReporter(CliHost host) : IReporter
             writer.WriteStartArray("notices");
             foreach (var notice in _notices)
             {
-                writer.WriteStringValue(notice);
+                writer.WriteStringValue(Redaction.Text(notice));
             }
 
             writer.WriteEndArray();

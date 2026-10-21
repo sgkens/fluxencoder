@@ -78,7 +78,7 @@ public static class EncodeOrchestrator
         ArgumentNullException.ThrowIfNull(job);
         ArgumentNullException.ThrowIfNull(environment);
 
-        var probed = await MediaProber.ProbeAsync(environment.FFprobePath, job.InputPath, cancellationToken).ConfigureAwait(false);
+        var probed = await MediaProber.ProbeAsync(environment.FFprobePath, job.InputPath, cancellationToken, environment.Policy).ConfigureAwait(false);
         if (!probed.IsSuccess)
         {
             return new Prepared(null, null, [], [], probed.Failure);

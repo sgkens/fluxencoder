@@ -68,6 +68,12 @@ public sealed record OutputPlan
     /// </summary>
     public ImmutableDictionary<string, string> PreparedFiles { get; init; } = ImmutableDictionary<string, string>.Empty;
 
+    /// <summary>
+    /// The output size limit passed to FFmpeg as <c>-fs</c>, if any. An output that reaches it was cut short, so the
+    /// executor fails it instead of promoting it.
+    /// </summary>
+    public long? MaxOutputBytes { get; init; }
+
     public bool Equals(OutputPlan? other) =>
         other is not null
         && Job == other.Job
@@ -75,6 +81,7 @@ public sealed record OutputPlan
         && FinalOutputPath == other.FinalOutputPath
         && TemporaryOutputPath == other.TemporaryOutputPath
         && ScratchDirectory == other.ScratchDirectory
+        && MaxOutputBytes == other.MaxOutputBytes
         && PreparedFiles.Count == other.PreparedFiles.Count
         && PreparedFiles.All(file => other.PreparedFiles.TryGetValue(file.Key, out var content) && content == file.Value);
 

@@ -48,6 +48,11 @@ public static class OutputPathPlanner
         }
 
         var requested = fs.GetFullPath(outputPath);
+        if (context.Policy.CheckOutput(requested) is { } denied)
+        {
+            return new Decision(null, null, denied, warnings);
+        }
+
         if (IsInput(requested, inputs, fs))
         {
             return Fail(FailureCategory.OutputIsInput, $"The output '{outputPath}' is an input file. Choose a different output name.");

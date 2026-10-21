@@ -4,6 +4,7 @@ using System.Text;
 using FluxEncoder.Core.Encoding;
 using FluxEncoder.Core.Media;
 using FluxEncoder.Core.Results;
+using FluxEncoder.Core.Security;
 
 namespace FluxEncoder.Core.Planning;
 
@@ -47,6 +48,11 @@ public static class ConcatPlanner
         var durations = new List<TimeSpan>();
         foreach (var input in inputs)
         {
+            if (context.Policy.CheckInput(input.Source, context.FileSystem.GetFullPath) is { } denied)
+            {
+                return denied;
+            }
+
             if (!input.IsProbed || !input.Source.IsSeekable || !input.Media.HasKnownDuration)
             {
                 return Fail(FailureCategory.InvalidInput, $"'{input.Source.Value}' must be a local file with a known length to be joined.");
@@ -117,7 +123,8 @@ public static class ConcatPlanner
         {
             var list = Path.Combine(scratch, "inputs.ffconcat");
             prepared = prepared.Add(list, ConcatList(inputs.Select(i => context.FileSystem.GetFullPath(i.Source.LocalPath!))));
-            arguments = ["-f", "concat", "-safe", "0", "-i", list, "-map", "0:v:0"];
+            // The list names absolute local paths only; the whitelist keeps it from naming anything else.
+            arguments = ["-f", "concat", "-safe", "0", "-protocol_whitelist", SourcePolicy.LocalWhitelist, "-i", list, "-map", "0:v:0"];
             if (firstAudio is not null)
             {
                 arguments.AddRange(["-map", "0:a:0?"]);
@@ -254,7 +261,7 @@ public static class ConcatPlanner
         var arguments = new List<string>();
         foreach (var input in inputs)
         {
-            arguments.AddRange(["-i", input.Source.Value]);
+            arguments.AddRange(SourcePolicy.FFmpegInput(input.Source, context.FileSystem.GetFullPath));
         }
 
         // Silence for inputs without audio, one lavfi input each, numbered after the real inputs.

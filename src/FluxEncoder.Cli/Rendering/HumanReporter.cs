@@ -70,7 +70,7 @@ internal sealed class HumanReporter : IReporter
                 new SpinnerColumn(Spinner.Known.Line))
             .StartAsync(async context =>
             {
-                var task = context.AddTask(Markup.Escape(title), maxValue: 1.0);
+                var task = context.AddTask(Markup.Escape(TerminalText.Safe(title)), maxValue: 1.0);
                 task.IsIndeterminate = true;
                 report = await run(new SpectreProgress(task, title)).ConfigureAwait(false);
                 if (report.Result.Outcome == JobOutcome.Succeeded)
@@ -180,10 +180,10 @@ internal sealed class HumanReporter : IReporter
         string.Join('\n', text.Split('\n').Select(line => "    " + line.TrimEnd('\r')));
 
     /// <summary>
-    /// Writes plain text in one style: escaped first, styled last.
+    /// Writes plain text in one style: secrets masked and control characters neutralized first, styled last.
     /// </summary>
     private static void WriteLine(IAnsiConsole console, string text, Style style) =>
-        console.Write(new Text(text + "\n", style));
+        console.Write(new Text(TerminalText.Safe(text) + "\n", style));
 
     /// <summary>
     /// Progress for animated terminals: a bar with ETA for finite inputs, a spinner with elapsed media time, speed,
@@ -200,7 +200,7 @@ internal sealed class HumanReporter : IReporter
                 task.Value = fraction;
             }
 
-            task.Description = Markup.Escape(details.Length > 0 ? $"{title}  {details}" : title);
+            task.Description = Markup.Escape(TerminalText.Safe(details.Length > 0 ? $"{title}  {details}" : title));
         }
     }
 

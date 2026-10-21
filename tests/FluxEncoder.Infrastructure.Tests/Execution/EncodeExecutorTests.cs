@@ -252,4 +252,41 @@ public sealed class EncodeExecutorTests : IDisposable
 
         Assert.Equal(FailureCategory.DependencyMissing, result.Failure?.Category);
     }
+
+    [Fact]
+    public async Task OutputReachingSizeLimit_IsNotPromoted()
+    {
+        var final = PathOf("limited.mkv");
+        const long Limit = 1024 * 1024;
+        var plan = new OutputPlan(Job(final),
+        [
+            new FFmpegInvocation(["-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=25:duration=20", "-c:v", "libx264", "-preset", "ultrafast", "-qp", "0", "-fs", "1048576", "-n", Temporary(final)]),
+        ])
+        {
+            TemporaryOutputPath = Temporary(final),
+            MaxOutputBytes = Limit,
+        };
+
+        var result = await EncodeExecutor.ExecuteAsync(FFmpeg, plan, new InputTimeline.Finite(TimeSpan.FromSeconds(20)), cancellationToken: Token);
+
+        Assert.Equal(FailureCategory.PolicyDenied, result.Failure?.Category);
+        Assert.Contains("size limit", result.Failure!.Message, StringComparison.Ordinal);
+        Assert.False(File.Exists(final));
+        Assert.False(File.Exists(Temporary(final)));
+    }
+
+    [Fact]
+    public async Task RunTimeLimit_StopsTheEncode()
+    {
+        var final = PathOf("forever.mkv");
+        var plan = SinglePass(final, ["-re", "-f", "lavfi", "-i", "testsrc2=size=160x120:rate=25"]);
+        var options = new FFmpegRunOptions { MaxRunTime = TimeSpan.FromSeconds(2), GraceTimeout = TimeSpan.FromSeconds(5) };
+        var started = DateTime.UtcNow;
+
+        var result = await EncodeExecutor.ExecuteAsync(FFmpeg, plan, new InputTimeline.Finite(TimeSpan.FromHours(1)), options: options, cancellationToken: Token);
+
+        Assert.Equal(FailureCategory.Timeout, result.Failure?.Category);
+        Assert.True(DateTime.UtcNow - started < TimeSpan.FromSeconds(20));
+        Assert.False(File.Exists(final));
+    }
 }

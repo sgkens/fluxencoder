@@ -91,6 +91,7 @@ public sealed class SettingsStoreTests : IDisposable
     [InlineData("""{ "presets": { "x": "hevc" } }""", "preset 'x' must be an object")]
     [InlineData("""{ "history": { "retentionDays": 0 } }""", "history.retentionDays")]
     [InlineData("""{ "history": { "enabled": "yes" } }""", "history.enabled")]
+    [InlineData("""{ "history": { "maxRuns": "lots" } }""", "history.maxRuns")]
     [InlineData("""{ "history": { "colour": 1 } }""", "history.colour")]
     [InlineData("""{ "schemaVersion": 9 }""", "newer FluxEncoder")]
     public void WrongShapes_WarnSpecifically(string json, string expected)
@@ -130,5 +131,75 @@ public sealed class SettingsStoreTests : IDisposable
         var preset = settings.Presets["tiny"];
         Assert.Equal("small", preset.Description);
         Assert.Equal(ImmutableDictionary<string, string>.Empty.Add("codec", "av1"), preset.Options);
+    }
+
+    [Fact]
+    public void SecurityAndLimits_ParseAndRoundTrip()
+    {
+        var root = Path.GetFullPath(Path.Combine(_directory, "media"));
+        var (settings, warnings) = LoadText($$"""
+            {
+              "security": { "allowExtraArgs": false, "allowPipes": false, "allowedSchemes": ["https", "SRT"], "allowedRoots": ["{{root.Replace("\\", "\\\\")}}"] },
+              "limits": { "maxRunMinutes": 90, "maxInputMB": 4096, "maxOutputMB": 2048, "threads": 4 }
+            }
+            """);
+
+        Assert.Empty(warnings);
+        Assert.False(settings.Security.AllowExtraArguments);
+        Assert.False(settings.Security.AllowPipes);
+        Assert.True(settings.Security.AllowDevices);
+        Assert.Equal(["https", "srt"], settings.Security.AllowedSchemes.Order(StringComparer.Ordinal));
+        Assert.Equal([root], settings.Security.AllowedRoots);
+        Assert.Equal(TimeSpan.FromMinutes(90), settings.Limits.MaxRunTime);
+        Assert.Equal(4096L * 1024 * 1024, settings.Limits.MaxInputBytes);
+        Assert.Equal(2048L * 1024 * 1024, settings.Limits.MaxOutputBytes);
+        Assert.Equal(4, settings.Limits.Threads);
+
+        SettingsStore.Save(File(), settings);
+        Assert.Equal(settings, SettingsStore.Load(File()).Settings);
+    }
+
+    [Theory]
+    [InlineData("""{ "security": { "allowedSchemes": ["gopher"] } }""", "'gopher' is not a protocol")]
+    [InlineData("""{ "security": { "allowedRoots": ["relative/dir"] } }""", "not an absolute path")]
+    [InlineData("""{ "security": { "allowPipes": "no" } }""", "security.allowPipes")]
+    [InlineData("""{ "security": { "colour": 1 } }""", "security.colour")]
+    [InlineData("""{ "limits": { "threads": 1000 } }""", "limits.threads")]
+    [InlineData("""{ "limits": { "maxRunMinutes": "soon" } }""", "limits.maxRunMinutes")]
+    [InlineData("""{ "limits": { "speed": 1 } }""", "limits.speed")]
+    public void SecurityAndLimits_WarnSpecifically(string json, string expected)
+    {
+        var (_, warnings) = LoadText(json);
+
+        Assert.Contains(warnings, w => w.Contains(expected, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Defaults_AreUnrestricted()
+    {
+        var (settings, _) = LoadText("{}");
+
+        Assert.Equal(Core.Security.SourcePolicy.Default, settings.Security);
+        Assert.Equal(Core.Security.ResourceLimits.None, settings.Limits);
+    }
+
+    [Fact]
+    public void Remotes_ParseRoundTripAndNeverHoldPasswords()
+    {
+        var (settings, warnings) = LoadText("""
+            { "remotes": {
+                "nas": { "url": "sftp://jane@nas.local:2222/media" },
+                "leaky": { "url": "ftp://bob:hunter2@files/x" },
+                "broken": { "address": "x" } } }
+            """);
+
+        Assert.Equal(["nas"], settings.Remotes.Keys);
+        Assert.Contains(warnings, w => w.Contains("remotes.leaky", StringComparison.Ordinal) && w.Contains("password", StringComparison.Ordinal));
+        Assert.DoesNotContain(warnings, w => w.Contains("hunter2", StringComparison.Ordinal));
+        Assert.Contains(warnings, w => w.Contains("remotes.broken", StringComparison.Ordinal));
+
+        SettingsStore.Save(File(), settings);
+        Assert.Equal(settings, SettingsStore.Load(File()).Settings);
+        Assert.Contains("sftp://jane@nas.local:2222/media", System.IO.File.ReadAllText(File()), StringComparison.Ordinal);
     }
 }

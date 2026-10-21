@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using FluxEncoder.Core.Hardware;
 
 namespace FluxEncoder.Core.Encoding;
@@ -92,6 +93,24 @@ public sealed record EncodingJob
             field = value;
         }
     } = StreamSelection.Default;
+
+    /// <summary>
+    /// Raw FFmpeg arguments from <c>--ffmpeg-arg</c>, placed among the output options. They bypass every check
+    /// FluxEncoder makes and are allowed only when <c>SourcePolicy.AllowExtraArguments</c> is set (TSKE010.1).
+    /// </summary>
+    public ImmutableArray<string> ExtraArguments
+    {
+        get;
+        init
+        {
+            if (value.IsDefault || value.Any(a => a is null))
+            {
+                throw new ArgumentException("Extra arguments cannot be null.", nameof(value));
+            }
+
+            field = value;
+        }
+    } = [];
 
     public JobPolicy Policy
     {

@@ -45,8 +45,8 @@ public sealed record FFmpegRunResult(
         _ => new JobFailure(
             FailureCategory.Timeout,
             stallTimeout is { } stall
-                ? $"FFmpeg made no progress for {stall.TotalSeconds:0} s and was stopped."
-                : "FFmpeg stopped making progress and was stopped.")
+                ? $"FFmpeg made no progress for {stall.TotalSeconds:0} s, or exceeded its run-time limit, and was stopped."
+                : "FFmpeg stopped making progress, or exceeded its run-time limit, and was stopped.")
         {
             Detail = StandardError.Trim(),
         },

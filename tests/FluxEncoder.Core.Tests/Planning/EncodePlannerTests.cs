@@ -37,7 +37,7 @@ public sealed class EncodePlannerTests
 
         string[] expected =
         [
-            "-i", "/media/movie.mkv",
+            "-protocol_whitelist", "file,crypto,data", "-i", "/media/movie.mkv",
             "-map", "0:0", "-map", "0:1", "-map", "0:2", "-map", "0:3", "-map", "0:4", "-map", "0:5",
             "-c:v:0", "libx265",
             "-preset:v:0", "medium", "-crf:v:0", "23",
@@ -200,7 +200,7 @@ public sealed class EncodePlannerTests
 
         var args = Planned(Job("/media/out/a.mkv"), input).Plan!.Invocations[0].Arguments;
 
-        Assert.Equal(["-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "30", "-i", "https://cdn.example/v.mkv"], args.Take(8));
+        Assert.Equal(["-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "30", "-protocol_whitelist", "http,https,tcp,tls,crypto,httpproxy", "-i", "https://cdn.example/v.mkv"], args.Take(10));
     }
 
     [Fact]
@@ -210,7 +210,7 @@ public sealed class EncodePlannerTests
 
         var planned = Planned(Job("/media/out/a.mkv"), input);
         Assert.Equal(
-            ["-i", "pipe:0", "-c:v", "libx265", "-preset:v", "medium", "-crf:v", "23", "-c:a", "copy", "-n", "-f", "matroska", "/media/out/.a.tok1.partial.mkv"],
+            ["-protocol_whitelist", "pipe", "-i", "pipe:0", "-c:v", "libx265", "-preset:v", "medium", "-crf:v", "23", "-c:a", "copy", "-n", "-f", "matroska", "/media/out/.a.tok1.partial.mkv"],
             planned.Plan!.Invocations[0].Arguments);
         Assert.IsType<InputTimeline.Unbounded>(planned.Timeline);
 

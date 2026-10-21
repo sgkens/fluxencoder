@@ -43,11 +43,13 @@ public sealed class SettingsAndHistoryTests : IAsyncLifetime
 
     private sealed record Run(int ExitCode, string Out, string Error);
 
-    private async Task<Run> RunAsync(params string[] args)
+    private Task<Run> RunAsync(params string[] args) => RunWithVariablesAsync(new Dictionary<string, string>(), args);
+
+    private async Task<Run> RunWithVariablesAsync(IReadOnlyDictionary<string, string> variables, params string[] args)
     {
         var output = new StringWriter();
         var error = new StringWriter();
-        var host = new CliHost(output, error, _ => null, ErrorIsTerminal: false) { Paths = Paths };
+        var host = new CliHost(output, error, name => variables.GetValueOrDefault(name), ErrorIsTerminal: false) { Paths = Paths };
 
         var exitCode = await CliApplication.RunAsync(args, host, TestContext.Current.CancellationToken);
         return new Run(exitCode, output.ToString(), error.ToString());
@@ -234,5 +236,74 @@ public sealed class SettingsAndHistoryTests : IAsyncLifetime
 
         Assert.Equal(0, run.ExitCode);
         Assert.Contains("No runs recorded yet", run.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CredentialsInInputUrl_NeverReachOutputJsonOrHistory()
+    {
+        SkipWithoutFFmpeg();
+        const string Password = "s3cretPW-91";
+        var url = $"http://alice:{Password}@127.0.0.1:9/live.ts?token=t0ken-77";
+
+        var human = await RunAsync("encode", url, "-o", PathOf("net.mkv"), "--verbose");
+        var json = await RunAsync("encode", url, "-o", PathOf("net2.mkv"), "--json");
+
+        Assert.Equal(3, human.ExitCode);
+        foreach (var text in new[] { human.Out, human.Error, json.Out, json.Error })
+        {
+            Assert.DoesNotContain(Password, text, StringComparison.Ordinal);
+            Assert.DoesNotContain("t0ken-77", text, StringComparison.Ordinal);
+        }
+
+        Assert.Contains("alice:***@127.0.0.1", human.Error, StringComparison.Ordinal);
+
+        SqliteConnection.ClearAllPools();
+        foreach (var file in Directory.GetFiles(Paths.Data))
+        {
+            var bytes = System.Text.Encoding.UTF8.GetString(await File.ReadAllBytesAsync(file, TestContext.Current.CancellationToken));
+            Assert.DoesNotContain(Password, bytes, StringComparison.Ordinal);
+            Assert.DoesNotContain("t0ken-77", bytes, StringComparison.Ordinal);
+        }
+
+        var history = await RunAsync("history", "list", "--json");
+        Assert.Contains("alice:***@", history.Out, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task FFmpegArg_IsPassedThroughToFFmpeg()
+    {
+        SkipWithoutFFmpeg();
+
+        var run = await RunAsync("encode", PathOf("clip.mkv"), "-c", "copy", "-o", PathOf("titled.mkv"), "--ffmpeg-arg", "-metadata", "--ffmpeg-arg", "title=Raw Title");
+
+        Assert.Equal(0, run.ExitCode);
+        Assert.Contains("FluxEncoder cannot check what they do", run.Error, StringComparison.Ordinal);
+        var probe = await ProcessCapture.RunAsync(Tools.FFprobe!.Path, ["-v", "error", "-show_entries", "format_tags=title", "-of", "csv=p=0", "-i", PathOf("titled.mkv")], TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        Assert.Equal("Raw Title", probe.StandardOutput.Trim());
+    }
+
+    [Fact]
+    public async Task ManagedMode_DisablesFFmpegArg()
+    {
+        SkipWithoutFFmpeg();
+
+        var run = await RunWithVariablesAsync(new Dictionary<string, string> { ["FLUXENCODER_MANAGED"] = "1" }, "encode", PathOf("clip.mkv"), "-o", PathOf("m.mkv"), "--ffmpeg-arg", "-tune");
+
+        Assert.Equal(2, run.ExitCode);
+        Assert.Contains("--ffmpeg-arg is disabled", run.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task SettingsSecurity_ConfinesInputsToAllowedRoots()
+    {
+        SkipWithoutFFmpeg();
+        var allowed = PathOf("allowed");
+        Directory.CreateDirectory(allowed);
+        await WriteSettingsAsync($$"""{ "security": { "allowedRoots": [{{System.Text.Json.JsonSerializer.Serialize(allowed)}}] } }""");
+
+        var run = await RunAsync("encode", PathOf("clip.mkv"), "-o", Path.Combine(allowed, "x.mkv"));
+
+        Assert.Equal(2, run.ExitCode);
+        Assert.Contains("outside the allowed folders", run.Error, StringComparison.Ordinal);
     }
 }

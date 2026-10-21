@@ -2,6 +2,7 @@ using System.Globalization;
 using FluxEncoder.Core.Encoding;
 using FluxEncoder.Core.Media;
 using FluxEncoder.Core.Results;
+using FluxEncoder.Core.Security;
 
 namespace FluxEncoder.Core.Planning;
 
@@ -40,6 +41,11 @@ public static class ThumbnailPlanner
 
         var warnings = new List<JobWarning>();
         var extension = Path.GetExtension(job.OutputPath);
+
+        if (context.Policy.CheckInput(input.Source, context.FileSystem.GetFullPath) is { } denied)
+        {
+            return denied;
+        }
 
         if (!Formats.TryGetValue(extension, out var format))
         {
@@ -132,7 +138,7 @@ public static class ThumbnailPlanner
 
         List<string> arguments =
         [
-            "-ss", seconds, "-i", input.Source.Value,
+            "-ss", seconds, .. SourcePolicy.FFmpegInput(input.Source, context.FileSystem.GetFullPath),
             "-map", "0:" + video.Index.ToString(CultureInfo.InvariantCulture),
             "-vf", string.Join(',', filters),
             "-frames:v", "1",

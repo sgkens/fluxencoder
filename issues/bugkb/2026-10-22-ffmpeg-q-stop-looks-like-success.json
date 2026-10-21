@@ -1,0 +1,10 @@
+{
+  "type": "gotcha",
+  "title": "FFmpeg stopped with 'q' on stdin exits 0 with progress=end, indistinguishable from a natural finish",
+  "symptom": "A wrapper that stops FFmpeg early (stall watchdog, run-time limit, user cancel) by writing 'q' to stdin sees exit code 0 and a final '-progress' block ending in 'progress=end', exactly as for a completed encode. Logic such as 'exit 0 and final progress means it finished anyway' then reports the stopped run as successful and promotes a truncated output file.",
+  "cause": "'q' makes FFmpeg flush and finalize the output normally, so it exits 0 and emits its last progress report with progress=end. Neither signal says whether the input was fully processed.",
+  "fix": "Record whether the wrapper itself requested the stop and classify by that, never by exit code or progress=end. If a natural finish must be told apart from a stop, compare processed time (out_time_us) with the expected duration instead. Also treat exit code 255 after a stop as clean: FFmpeg exits 255 when it finalizes because of SIGINT/SIGTERM (e.g. terminal Ctrl+C reaching the child).",
+  "tags": ["ffmpeg", "process", "dotnet"],
+  "env": {"ffmpeg": "8.0.1", "os": "Linux (WSL2)"},
+  "scope": "general"
+}

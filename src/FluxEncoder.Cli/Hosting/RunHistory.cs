@@ -2,6 +2,7 @@ using FluxEncoder.Cli.Rendering;
 using FluxEncoder.Core.Encoding;
 using FluxEncoder.Core.Media;
 using FluxEncoder.Core.Results;
+using FluxEncoder.Core.Security;
 using FluxEncoder.Infrastructure.Configuration;
 using FluxEncoder.Infrastructure.History;
 using Microsoft.Data.Sqlite;
@@ -65,19 +66,19 @@ internal sealed class RunHistory
             Id = RunRecord.NewId(),
             StartedUtc = started,
             FinishedUtc = DateTimeOffset.UtcNow,
-            Input = report.Input,
-            Output = result.OutputPath,
+            Input = Redaction.Text(report.Input),
+            Output = Redaction.Text(result.OutputPath),
             Outcome = JsonReporter.Kebab(result.Outcome.ToString()),
             ExitCode = (int)result.ExitCode,
             FailureCategory = result.Failure is { } failure ? JsonReporter.Kebab(failure.Category.ToString()) : null,
-            FailureMessage = result.Failure?.Message,
+            FailureMessage = result.Failure?.Message is { } message ? Redaction.Text(message) : null,
             VideoEncoder = report.VideoEncoder,
             Hardware = report.Strategy is { } strategy ? JsonReporter.Kebab(strategy.Vendor.ToString()) : null,
             Attempts = result.Attempts,
             ElapsedSeconds = Math.Round(result.Elapsed.TotalSeconds, 3),
             InputBytes = FileSize(InputSource.Classify(report.Input).LocalPath),
             OutputBytes = result.Outcome == JobOutcome.Succeeded ? FileSize(result.OutputPath) : null,
-            Command = report.Planned?.Plan?.Invocations[^1].ToDisplayString(ffmpegPath),
+            Command = report.Planned?.Plan?.Invocations[^1].ToDisplayString(ffmpegPath) is { } command ? Redaction.Text(command) : null,
             WarningCodes = [.. result.Warnings.Select(w => w.Code)],
         };
 

@@ -71,4 +71,14 @@ public sealed record EncodingJob
             field = value;
         }
     }
+
+    public JobPolicy Policy
+    {
+        get;
+        init
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            field = value;
+        }
+    } = JobPolicy.Default;
 }

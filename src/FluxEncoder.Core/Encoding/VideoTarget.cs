@@ -27,5 +27,28 @@ public abstract record VideoTarget
         public VideoCodec Codec { get; }
 
         public QualityPreset Quality { get; }
+
+        /// <summary>
+        /// Average bit rate in kbit/s. When set, the encode targets a size instead of a constant quality.
+        /// </summary>
+        public int? TargetBitRateKbps
+        {
+            get;
+            init
+            {
+                if (value is { } rate)
+                {
+                    ArgumentOutOfRangeException.ThrowIfNegativeOrZero(rate);
+                }
+
+                field = value;
+            }
+        }
+
+        /// <summary>
+        /// Analyse the whole input first so a target bit rate is spent where it matters. Requires
+        /// <see cref="TargetBitRateKbps"/>; constant-quality encodes gain nothing from a second pass.
+        /// </summary>
+        public bool TwoPass { get; init; }
     }
 }

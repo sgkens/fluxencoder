@@ -24,4 +24,21 @@ public interface IHardwareStrategy
     /// </summary>
     /// <returns><see langword="false"/> when this vendor has no encoder for the codec.</returns>
     bool TryGetVideoEncoder(VideoCodec codec, [NotNullWhen(true)] out string? encoder);
+
+    /// <summary>
+    /// Encoder options (name without the leading dash, value) that realise <paramref name="quality"/> as a
+    /// constant-quality encode. The planner adds stream specifiers.
+    /// </summary>
+    IReadOnlyList<KeyValuePair<string, string>> GetQualityOptions(VideoCodec codec, QualityPreset quality);
+
+    /// <summary>
+    /// Encoder options for a target-bit-rate encode at <paramref name="quality"/>: the speed preset without
+    /// the constant-quality setting, which a bit-rate target replaces.
+    /// </summary>
+    IReadOnlyList<KeyValuePair<string, string>> GetBitRateOptions(VideoCodec codec, QualityPreset quality);
+
+    /// <summary>
+    /// Whether the encoder for <paramref name="codec"/> supports FFmpeg's <c>-pass</c>/<c>-passlogfile</c>.
+    /// </summary>
+    bool SupportsTwoPass(VideoCodec codec);
 }

@@ -72,6 +72,16 @@ public sealed record EncodingJob
         }
     }
 
+    public StreamSelection Streams
+    {
+        get;
+        init
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            field = value;
+        }
+    } = StreamSelection.Default;
+
     public JobPolicy Policy
     {
         get;

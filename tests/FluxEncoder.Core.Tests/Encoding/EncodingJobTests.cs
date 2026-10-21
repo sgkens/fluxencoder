@@ -32,7 +32,7 @@ public sealed class EncodingJobTests
 
         Assert.Equal(Job, same);
         Assert.NotEqual(Job, Job with { Hardware = HardwareVendor.Nvidia });
-        Assert.NotEqual(Job, Job with { Audio = new AudioTarget.Disabled() });
+        Assert.NotEqual(Job, Job with { Audio = new AudioTarget.Encode(AudioCodec.Opus) });
     }
 
     [Theory]
@@ -85,13 +85,11 @@ public sealed class EncodingJobTests
         string Describe(VideoTarget target) => target switch
         {
             VideoTarget.StreamCopy => "copy",
-            VideoTarget.Disabled => "none",
             VideoTarget.Encode e => $"{e.Codec}/{e.Quality}",
             _ => throw new InvalidOperationException(),
         };
 
         Assert.Equal("Hevc/High", Describe(Job.Video));
         Assert.Equal("copy", Describe(new VideoTarget.StreamCopy()));
-        Assert.Equal("none", Describe(new VideoTarget.Disabled()));
     }
 }

@@ -1,8 +1,9 @@
 namespace FluxEncoder.Core.Encoding;
 
 /// <summary>
-/// What an encoding job does with the input's video: copy it, re-encode it, or leave it out.
-/// The set of cases is closed; match on the nested records.
+/// What an encoding job does with the input's video: copy it or re-encode it.
+/// The set of cases is closed; match on the nested records. Which streams are kept at all is decided by
+/// <see cref="StreamSelection"/>, not here.
 /// </summary>
 public abstract record VideoTarget
 {
@@ -14,11 +15,6 @@ public abstract record VideoTarget
     /// Copy the video bitstream unchanged (<c>-c:v copy</c>).
     /// </summary>
     public sealed record StreamCopy : VideoTarget;
-
-    /// <summary>
-    /// Omit video from the output (<c>-vn</c>).
-    /// </summary>
-    public sealed record Disabled : VideoTarget;
 
     public sealed record Encode : VideoTarget
     {

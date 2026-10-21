@@ -1,8 +1,9 @@
 namespace FluxEncoder.Core.Encoding;
 
 /// <summary>
-/// What an encoding job does with the input's audio: copy it, re-encode it, or leave it out.
-/// The set of cases is closed; match on the nested records.
+/// What an encoding job does with the input's audio: copy it or re-encode it.
+/// The set of cases is closed; match on the nested records. Which streams are kept at all is decided by
+/// <see cref="StreamSelection"/>, not here.
 /// </summary>
 public abstract record AudioTarget
 {
@@ -14,11 +15,6 @@ public abstract record AudioTarget
     /// Copy the audio bitstream unchanged (<c>-c:a copy</c>).
     /// </summary>
     public sealed record StreamCopy : AudioTarget;
-
-    /// <summary>
-    /// Omit audio from the output (<c>-an</c>).
-    /// </summary>
-    public sealed record Disabled : AudioTarget;
 
     public sealed record Encode : AudioTarget
     {

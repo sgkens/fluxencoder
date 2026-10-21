@@ -43,15 +43,15 @@ public sealed class EntryPointTests
     {
         var root = CliApplication.BuildRootCommand();
 
-        Assert.Equal(["encode"], root.Subcommands.Select(c => c.Name));
+        Assert.Equal(["encode", "config", "history"], root.Subcommands.Select(c => c.Name));
         Assert.All(root.Subcommands, c => Assert.False(c.Hidden));
     }
 
     [Fact]
     public void BuildingTwice_DoesNotShareOptionState()
     {
-        var first = CliApplication.BuildRootCommand().Subcommands.Single();
-        var second = CliApplication.BuildRootCommand().Subcommands.Single();
+        var first = CliApplication.BuildRootCommand().Subcommands.Single(c => c.Name == "encode");
+        var second = CliApplication.BuildRootCommand().Subcommands.Single(c => c.Name == "encode");
 
         Assert.NotSame(first.Options[0], second.Options[0]);
     }

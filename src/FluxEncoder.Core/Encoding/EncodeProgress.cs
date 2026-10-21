@@ -30,6 +30,17 @@ public sealed record EncodeProgress
     public long? DroppedFrames { get; init; }
 
     /// <summary>
+    /// FFmpeg's CPU use since the previous report, as a share of the whole machine (all logical cores), 0–100.
+    /// <see langword="null"/> when it could not be measured.
+    /// </summary>
+    public double? CpuPercent { get; init; }
+
+    /// <summary>
+    /// FFmpeg's resident memory (working set) in bytes, or <see langword="null"/> when it could not be measured.
+    /// </summary>
+    public long? MemoryBytes { get; init; }
+
+    /// <summary>
     /// The last report of the run (<c>progress=end</c>).
     /// </summary>
     public bool IsFinal { get; init; }

@@ -1,3 +1,5 @@
+using FluxEncoder.Infrastructure.Storage;
+
 namespace FluxEncoder.Cli.Hosting;
 
 /// <summary>
@@ -16,4 +18,9 @@ internal sealed record CliHost(TextWriter Out, TextWriter Error, Func<string, st
         Environment.GetEnvironmentVariable,
         !System.Console.IsErrorRedirected,
         !System.Console.IsOutputRedirected);
+
+    /// <summary>
+    /// Where settings and history live. Tests point this at a temporary folder so they never touch the user's files.
+    /// </summary>
+    public AppPaths Paths { get; init; } = AppPaths.Current;
 }

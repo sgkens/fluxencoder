@@ -9,6 +9,7 @@ using FluxEncoder.Core.Hardware;
 using FluxEncoder.Core.Planning;
 using FluxEncoder.Core.Results;
 using FluxEncoder.Infrastructure.Execution;
+using FluxEncoder.Infrastructure.History;
 
 namespace FluxEncoder.Cli.Commands;
 
@@ -18,6 +19,8 @@ namespace FluxEncoder.Cli.Commands;
 /// </summary>
 internal sealed class EncodeCommand
 {
+    public const string Name = "encode";
+
     private static readonly string[] Codecs = ["h264", "hevc", "av1", "vvc", "copy"];
     private static readonly string[] AudioCodecs = ["copy", "aac", "opus", "ac3", "eac3", "flac", "mp3"];
     private static readonly string[] Qualities = ["fast", "balanced", "high"];
@@ -146,6 +149,16 @@ internal sealed class EncodeCommand
 
     public readonly Option<bool> NoColor = new("--no-color") { Description = "Disable colour (also NO_COLOR=1)." };
 
+    public readonly Option<string?> Preset = new("--preset", "-p")
+    {
+        Description = "Use a named preset from settings.json; typed options still win. See 'config init'.",
+    };
+
+    public readonly Option<bool> NoConfig = new("--no-config")
+    {
+        Description = "Ignore the encode defaults in settings.json (presets still work with --preset).",
+    };
+
     public readonly Option<string?> FFmpeg = new("--ffmpeg") { Description = "FFmpeg executable or its directory." };
 
     public readonly Option<string?> FFprobe = new("--ffprobe") { Description = "FFprobe executable or its directory." };
@@ -153,13 +166,14 @@ internal sealed class EncodeCommand
     /// <summary>
     /// A fresh command with its own option instances, so building the tree twice never shares validators.
     /// </summary>
-    public static Command Build(CliHost host)
+    public static Command Build(CliHost host, CliSession session)
     {
         ArgumentNullException.ThrowIfNull(host);
-        return new EncodeCommand().Create(host);
+        ArgumentNullException.ThrowIfNull(session);
+        return new EncodeCommand().Create(host, session);
     }
 
-    private Command Create(CliHost host)
+    private Command Create(CliHost host, CliSession session)
     {
         Codec.AcceptOnlyFromAmong(Codecs);
         Quality.AcceptOnlyFromAmong(Qualities);
@@ -176,17 +190,17 @@ internal sealed class EncodeCommand
             }
         });
 
-        var command = new Command("encode", "Convert media files with FFmpeg: re-encode or copy video, choose tracks, trim, and batch.")
+        var command = new Command(Name, "Convert media files with FFmpeg: re-encode or copy video, choose tracks, trim, and batch.")
         {
             Inputs, Output, Format, Codec, Quality, VideoBitRate, TwoPass, AudioCodec, AudioBitRate,
             Video, Audio, Subtitles, NoChapters, NoMetadata, NoCover, NoAttachments, KeepData,
             Start, End, Duration, HardwareOption, HardwareFallback,
             Overwrite, SkipExisting, RenameExisting, KeepPartial, Retries, FailFast,
-            DryRun, Json, Quiet, Verbose, NoColor, FFmpeg, FFprobe,
+            DryRun, Json, Quiet, Verbose, NoColor, Preset, NoConfig, FFmpeg, FFprobe,
         };
 
         command.Validators.Add(Validate);
-        command.SetAction((result, token) => RunAsync(result, host, token));
+        command.SetAction((result, token) => RunAsync(result, host, session, token));
         return command;
     }
 
@@ -259,11 +273,16 @@ internal sealed class EncodeCommand
         }
     }
 
-    private async Task<int> RunAsync(ParseResult parse, CliHost host, CancellationToken cancellationToken)
+    private async Task<int> RunAsync(ParseResult parse, CliHost host, CliSession session, CancellationToken cancellationToken)
     {
         var settings = OutputSettings.Resolve(host, parse.GetValue(Json), parse.GetValue(Quiet), parse.GetValue(Verbose), parse.GetValue(NoColor));
         IReporter reporter = settings.Json ? new JsonReporter(host) : new HumanReporter(host, settings);
         var dryRun = parse.GetValue(DryRun);
+
+        foreach (var notice in session.Notices)
+        {
+            reporter.Notice(notice);
+        }
 
         var (inputs, emptyDirectories) = InputExpander.Expand(parse.GetValue(Inputs) ?? []);
         if (emptyDirectories.Count > 0 && inputs.Count == 0)
@@ -278,15 +297,19 @@ internal sealed class EncodeCommand
             return Fatal(FailureCategory.InvalidUsage, $"With {inputs.Count} inputs, --output must be a directory, not the file '{output}'.");
         }
 
-        var session = await ToolSession.CreateAsync(parse.GetValue(FFmpeg), parse.GetValue(FFprobe), cancellationToken).ConfigureAwait(false);
-        if (!session.IsSuccess)
+        var tools = await ToolSession.CreateAsync(parse.GetValue(FFmpeg), parse.GetValue(FFprobe), cancellationToken).ConfigureAwait(false);
+        if (!tools.IsSuccess)
         {
-            reporter.Fatal(session.Failure);
-            return (int)session.Failure.ExitCode;
+            reporter.Fatal(tools.Failure);
+            return (int)tools.Failure.ExitCode;
         }
 
+        var history = dryRun
+            ? null
+            : await RunHistory.OpenAsync(host, session.Settings.History, reporter, cancellationToken).ConfigureAwait(false);
+
         var reserved = new HashSet<string>(OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
-        var environment = session.Value with { ReservedOutputs = reserved };
+        var environment = tools.Value with { ReservedOutputs = reserved };
         var reports = new List<JobReport>();
         var notStarted = 0;
         var failFast = parse.GetValue(FailFast);
@@ -303,9 +326,16 @@ internal sealed class EncodeCommand
             var video = VideoTarget(parse);
             var job = BuildJob(parse, input, OutputNamer.Resolve(input, output, parse.GetValue(Format), video, several), video);
 
+            var started = DateTimeOffset.UtcNow;
+            var telemetry = history is { RecordsTelemetry: true } ? new TelemetryRecorder() : null;
             var report = dryRun
                 ? await PlanAsync(input, job, environment, cancellationToken).ConfigureAwait(false)
-                : await reporter.RunJobAsync(i, inputs.Count, input, progress => EncodeAsync(input, job, environment, progress, cancellationToken)).ConfigureAwait(false);
+                : await reporter.RunJobAsync(i, inputs.Count, input, progress => EncodeAsync(input, job, environment, Tee(progress, telemetry), cancellationToken)).ConfigureAwait(false);
+
+            if (history is not null)
+            {
+                await history.RecordAsync(report, started, telemetry?.Samples ?? [], environment.FFmpegPath, cancellationToken).ConfigureAwait(false);
+            }
 
             if (report.Planned is { IsSkipped: false, Plan: { } plan })
             {
@@ -332,6 +362,18 @@ internal sealed class EncodeCommand
             var failure = new JobFailure(category, message);
             reporter.Fatal(failure);
             return (int)failure.ExitCode;
+        }
+    }
+
+    private static IProgress<JobProgress> Tee(IProgress<JobProgress> first, IProgress<JobProgress>? second) =>
+        second is null ? first : new TeeProgress(first, second);
+
+    private sealed class TeeProgress(IProgress<JobProgress> first, IProgress<JobProgress> second) : IProgress<JobProgress>
+    {
+        public void Report(JobProgress value)
+        {
+            first.Report(value);
+            second.Report(value);
         }
     }
 

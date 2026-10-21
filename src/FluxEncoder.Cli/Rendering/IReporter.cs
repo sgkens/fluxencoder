@@ -15,6 +15,11 @@ internal interface IReporter
     void Fatal(JobFailure failure);
 
     /// <summary>
+    /// A problem with settings or presets that does not stop the run. Always shown, even with <c>--quiet</c>.
+    /// </summary>
+    void Notice(string message);
+
+    /// <summary>
     /// Runs one job, presenting its progress. Whether a percentage can be shown is learned from the reports
     /// themselves (<see cref="JobProgress.Fraction"/> is <see langword="null"/> for inputs without a known length).
     /// </summary>

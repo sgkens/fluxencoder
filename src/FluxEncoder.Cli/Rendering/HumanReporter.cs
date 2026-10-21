@@ -41,6 +41,8 @@ internal sealed class HumanReporter : IReporter
         }
     }
 
+    public void Notice(string message) => WriteLine(_error, $"{Symbols.Warning} {message}", Palette.Warning);
+
     public async Task<JobReport> RunJobAsync(int index, int count, string label, Func<IProgress<JobProgress>, Task<JobReport>> run)
     {
         var title = count > 1 ? $"[{index + 1}/{count}] {label}" : label;

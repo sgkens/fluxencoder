@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using FluxEncoder.Cli.Commands;
 using FluxEncoder.Cli.Hosting;
 using FluxEncoder.Core.Results;
+using FluxEncoder.Infrastructure.Configuration;
 
 namespace FluxEncoder.Cli;
 
@@ -18,13 +19,15 @@ namespace FluxEncoder.Cli;
 /// </remarks>
 public static class CliApplication
 {
-    public static RootCommand BuildRootCommand() => BuildRootCommand(CliHost.Console);
+    public static RootCommand BuildRootCommand() => BuildRootCommand(CliHost.Console, new CliSession());
 
-    internal static RootCommand BuildRootCommand(CliHost host)
+    internal static RootCommand BuildRootCommand(CliHost host, CliSession session)
     {
         var root = new RootCommand("FluxEncoder: a terminal front end for FFmpeg encoding jobs.")
         {
-            EncodeCommand.Build(host),
+            EncodeCommand.Build(host, session),
+            ConfigCommand.Build(host),
+            HistoryCommand.Build(host),
         };
 
         return root;
@@ -57,16 +60,43 @@ public static class CliApplication
         ArgumentNullException.ThrowIfNull(args);
         ArgumentNullException.ThrowIfNull(host);
 
-        var parse = BuildRootCommand(host).Parse(args);
-        if (parse.Errors.Count > 0)
+        var session = new CliSession();
+        var root = BuildRootCommand(host, session);
+        var parse = root.Parse(args);
+
+        if (parse.Errors.Count == 0 && parse.CommandResult.Command.Name == EncodeCommand.Name)
         {
-            foreach (var error in parse.Errors)
+            var useSettings = !parse.GetValue<bool>("--no-config");
+            var preset = parse.GetValue<string?>("--preset");
+            if (useSettings || preset is not null)
             {
-                await host.Error.WriteLineAsync(error.Message).ConfigureAwait(false);
+                var (settings, warnings) = SettingsStore.Load(host.Paths.SettingsFile);
+                session.Settings = settings;
+                session.Notices.AddRange(warnings);
             }
 
-            await host.Error.WriteLineAsync("Run with --help for usage.").ConfigureAwait(false);
-            return (int)ExitCode.InvalidUsage;
+            var merged = SettingsMerge.Apply(parse, parse.CommandResult.Command, args, session.Settings, preset, useSettings);
+            if (merged.Error is { } mergeError)
+            {
+                return await UsageErrorAsync(host, [mergeError]).ConfigureAwait(false);
+            }
+
+            session.Notices.AddRange(merged.Notices);
+            if (merged.Arguments.Count > args.Length)
+            {
+                parse = root.Parse(merged.Arguments);
+                if (parse.Errors.Count > 0)
+                {
+                    return await UsageErrorAsync(
+                        host,
+                        [.. parse.Errors.Select(e => e.Message), $"Some values came from settings: {string.Join(", ", merged.Provenance)}."]).ConfigureAwait(false);
+                }
+            }
+        }
+
+        if (parse.Errors.Count > 0)
+        {
+            return await UsageErrorAsync(host, [.. parse.Errors.Select(e => e.Message)]).ConfigureAwait(false);
         }
 
         try
@@ -100,5 +130,16 @@ public static class CliApplication
             await host.Error.WriteLineAsync(ex.ToString()).ConfigureAwait(false);
             return (int)ExitCode.GeneralFailure;
         }
+    }
+
+    private static async Task<int> UsageErrorAsync(CliHost host, IEnumerable<string> messages)
+    {
+        foreach (var message in messages)
+        {
+            await host.Error.WriteLineAsync(message).ConfigureAwait(false);
+        }
+
+        await host.Error.WriteLineAsync("Run with --help for usage.").ConfigureAwait(false);
+        return (int)ExitCode.InvalidUsage;
     }
 }

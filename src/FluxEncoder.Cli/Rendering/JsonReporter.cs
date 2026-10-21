@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using FluxEncoder.Cli.Hosting;
 using FluxEncoder.Core.Encoding;
@@ -16,6 +17,7 @@ namespace FluxEncoder.Cli.Rendering;
 ///   "schemaVersion": 1, "dryRun": false, "exitCode": 0,
 ///   "summary": { "succeeded": 1, "skipped": 0, "failed": 0, "notStarted": 0 },
 ///   "error": null | { "category": "dependency-missing", "exitCode": 5, "message": "...", "detail": "..." },
+///   "notices": [ "settings.json: ..." ],
 ///   "jobs": [ { "input", "output", "outcome", "elapsedSeconds", "attempts", "videoEncoder", "hardware",
 ///               "failure": null | {...}, "skipReason": null | "...", "warnings": [ { "code", "message" } ],
 ///               "commands": [ [ "ffmpeg", "-i", ... ] ] } ]
@@ -28,7 +30,10 @@ internal sealed class JsonReporter(CliHost host) : IReporter
     public const int SchemaVersion = 1;
 
     private readonly CliHost _host = host ?? throw new ArgumentNullException(nameof(host));
+    private readonly List<string> _notices = [];
     private string _ffmpegPath = "ffmpeg";
+
+    public void Notice(string message) => _notices.Add(message);
 
     public void Fatal(JobFailure failure)
     {
@@ -154,11 +159,19 @@ internal sealed class JsonReporter(CliHost host) : IReporter
     private void Write(Action<Utf8JsonWriter> body)
     {
         using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
+        using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping }))
         {
             writer.WriteStartObject();
             writer.WriteNumber("schemaVersion", SchemaVersion);
             body(writer);
+
+            writer.WriteStartArray("notices");
+            foreach (var notice in _notices)
+            {
+                writer.WriteStringValue(notice);
+            }
+
+            writer.WriteEndArray();
             writer.WriteEndObject();
         }
 

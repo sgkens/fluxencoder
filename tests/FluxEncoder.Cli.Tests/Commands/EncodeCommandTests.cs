@@ -1,6 +1,7 @@
 using System.Text.Json;
 using FluxEncoder.Cli.Hosting;
 using FluxEncoder.Infrastructure.Processes;
+using FluxEncoder.Infrastructure.Storage;
 using FluxEncoder.Infrastructure.Tooling;
 
 namespace FluxEncoder.Cli.Tests.Commands;
@@ -45,17 +46,19 @@ public sealed class EncodeCommandTests : IAsyncLifetime
 
     private sealed record Run(int ExitCode, string Out, string Error);
 
-    private static async Task<Run> RunAsync(IReadOnlyDictionary<string, string>? variables, params string[] args)
+    private AppPaths Paths => new(PathOf("app", "config"), PathOf("app", "data"), PathOf("app", "cache"));
+
+    private async Task<Run> RunAsync(IReadOnlyDictionary<string, string>? variables, params string[] args)
     {
         var output = new StringWriter();
         var error = new StringWriter();
-        var host = new CliHost(output, error, name => variables?.GetValueOrDefault(name), ErrorIsTerminal: false);
+        var host = new CliHost(output, error, name => variables?.GetValueOrDefault(name), ErrorIsTerminal: false) { Paths = Paths };
 
         var exitCode = await CliApplication.RunAsync(args, host, TestContext.Current.CancellationToken);
         return new Run(exitCode, output.ToString(), error.ToString());
     }
 
-    private static Task<Run> RunAsync(params string[] args) => RunAsync(null, args);
+    private Task<Run> RunAsync(params string[] args) => RunAsync(null, args);
 
     private string PathOf(params string[] parts) => Path.Combine([_directory, .. parts]);
 
@@ -271,7 +274,7 @@ public sealed class EncodeCommandTests : IAsyncLifetime
     public async Task Colour_OnlyOnTerminalsAndNeverWithNoColor(string? noColor, bool expectEscapes)
     {
         var output = new StringWriter();
-        var host = new CliHost(output, TextWriter.Null, name => name == "NO_COLOR" ? noColor : null, ErrorIsTerminal: false, OutIsTerminal: true);
+        var host = new CliHost(output, TextWriter.Null, name => name == "NO_COLOR" ? noColor : null, ErrorIsTerminal: false, OutIsTerminal: true) { Paths = Paths };
 
         SkipWithoutFFmpeg();
         var exitCode = await CliApplication.RunAsync(["encode", PathOf("clip.mkv"), "--dry-run", "--codec", "copy"], host, TestContext.Current.CancellationToken);

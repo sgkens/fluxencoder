@@ -44,7 +44,7 @@ internal static class HistoryCommand
                 return (int)ExitCode.GeneralFailure;
             }
 
-            await host.Out.WriteAsync(result.GetValue(json) ? Json(runs) : Rendering.TerminalText.Safe(Table(runs))).ConfigureAwait(false);
+            await host.Out.WriteAsync(result.GetValue(json) ? Json(runs) : Table(runs)).ConfigureAwait(false);
             return (int)ExitCode.Success;
         });
 
@@ -79,14 +79,14 @@ internal static class HistoryCommand
             var (database, notice) = await HistoryDatabase.OpenAsync(host.Paths.HistoryDatabase).ConfigureAwait(false);
             if (notice is not null)
             {
-                await host.Error.WriteLineAsync(notice).ConfigureAwait(false);
+                await host.Error.WriteLineAsync(Rendering.TerminalText.Safe(notice)).ConfigureAwait(false);
             }
 
             return (true, await action(new HistoryStore(database)).ConfigureAwait(false));
         }
         catch (Exception ex) when (ex is SqliteException or IOException or UnauthorizedAccessException or InvalidOperationException)
         {
-            await host.Error.WriteLineAsync($"Run history could not be read: {ex.Message}").ConfigureAwait(false);
+            await host.Error.WriteLineAsync(Rendering.TerminalText.Safe($"Run history could not be read: {ex.Message}")).ConfigureAwait(false);
             return (false, default);
         }
     }
@@ -105,18 +105,18 @@ internal static class HistoryCommand
             r.ElapsedSeconds.ToString("0.0", CultureInfo.InvariantCulture) + " s",
             r.VideoEncoder ?? "-",
             $"{Path.GetFileName(r.Input)} -> {r.Output}",
-        }).ToList();
+        }.Select(cell => Rendering.TerminalText.Safe(cell).Replace('\n', ' ')).ToArray()).ToList();
 
         string[] header = ["started", "outcome", "time", "encoder", "input -> output"];
-        var widths = Enumerable.Range(0, header.Length - 1).Select(i => rows.Max(row => row[i].Length)).Select((w, i) => Math.Max(w, header[i].Length)).ToArray();
+        var widths = Enumerable.Range(0, header.Length - 1).Select(i => rows.Max(row => Rendering.DisplayWidth.Of(row[i]))).Select((w, i) => Math.Max(w, header[i].Length)).ToArray();
 
-        // Columns are padded on plain text; nothing here is styled, so widths stay exact.
+        // Cells are made safe first and padded by display width after; nothing here is styled, so widths stay exact.
         var builder = new StringBuilder();
         foreach (var row in rows.Prepend(header))
         {
             for (var i = 0; i < row.Length - 1; i++)
             {
-                builder.Append(row[i].PadRight(widths[i] + 2));
+                builder.Append(Rendering.DisplayWidth.PadRight(row[i], widths[i] + 2));
             }
 
             builder.Append(row[^1]).Append('\n');

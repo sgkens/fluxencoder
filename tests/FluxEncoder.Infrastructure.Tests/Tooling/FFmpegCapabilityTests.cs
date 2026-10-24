@@ -2,8 +2,8 @@ using FluxEncoder.Core.Media;
 using FluxEncoder.Core.Results;
 using FluxEncoder.Core.Tooling;
 using FluxEncoder.Infrastructure.Probing;
-using FluxEncoder.Infrastructure.Tooling;
 using FluxEncoder.Infrastructure.Tests.Support;
+using FluxEncoder.Infrastructure.Tooling;
 
 namespace FluxEncoder.Infrastructure.Tests.Tooling;
 

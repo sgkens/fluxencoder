@@ -421,6 +421,65 @@ function Invoke-FluxDotNet {
 }
 
 # =====================================================================
+#  ARTIFACT SANITIZATION (TSKE014.5)
+# =====================================================================
+
+function Protect-FluxTestArtifacts {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Directory,
+        [Parameter(Mandatory)][string]$RepoRoot
+    )
+
+    if (-not [System.IO.Directory]::Exists($Directory)) {
+        return 0
+    }
+
+    $files = [System.IO.Directory]::GetFiles($Directory, '*.*', [System.IO.SearchOption]::AllDirectories)
+    $scrubbedCount = 0
+
+    $repoFull = [System.IO.Path]::GetFullPath($RepoRoot).TrimEnd('\', '/')
+    $repoSlash = $repoFull.Replace('\', '/')
+    $tempFull = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath()).TrimEnd('\', '/')
+    $tempSlash = $tempFull.Replace('\', '/')
+    $homeDir = if (-not [string]::IsNullOrWhiteSpace($env:HOME)) { $env:HOME } elseif (-not [string]::IsNullOrWhiteSpace($env:USERPROFILE)) { $env:USERPROFILE } else { $null }
+
+    foreach ($file in $files) {
+        $ext = [System.IO.Path]::GetExtension($file)
+        if ($ext -notin @('.xml', '.trx', '.json', '.log', '.txt', '.md')) {
+            continue
+        }
+
+        $text = [System.IO.File]::ReadAllText($file, [System.Text.Encoding]::UTF8)
+        $original = $text
+
+        if (-not [string]::IsNullOrWhiteSpace($repoFull)) {
+            $text = $text.Replace($repoFull, '<repo>').Replace($repoSlash, '<repo>')
+        }
+        if (-not [string]::IsNullOrWhiteSpace($tempFull)) {
+            $text = $text.Replace($tempFull, '<temp>').Replace($tempSlash, '<temp>')
+        }
+        if (-not [string]::IsNullOrWhiteSpace($homeDir)) {
+            $homeTrim = $homeDir.TrimEnd('\', '/')
+            $homeSlash = $homeTrim.Replace('\', '/')
+            $text = $text.Replace($homeTrim, '<home>').Replace($homeSlash, '<home>')
+        }
+
+        $text = [System.Text.RegularExpressions.Regex]::Replace($text, '(?<=\b(?:hostname|computerName)=")[^"]*(?=")', 'ci-runner')
+        $text = [System.Text.RegularExpressions.Regex]::Replace($text, '([a-zA-Z][a-zA-Z0-9+.-]*://[^/\s:@"'']+:)(?!\*\*\*@)[^@\s"'']+@', '$1***@')
+        $text = [System.Text.RegularExpressions.Regex]::Replace($text, '(?i)(\b(?:proxy-)?authorization\s*:\s*)(?:Bearer|Basic)?\s*[^\s"'',;<>]+', '$1***')
+        $text = [System.Text.RegularExpressions.Regex]::Replace($text, '(?i)([?&](?:token|key|secret|password|sig|signature)=)(?!\*\*\*)[^&\s"'',;<>]+', '$1***')
+
+        if (-not [string]::Equals($text, $original, [System.StringComparison]::Ordinal)) {
+            [System.IO.File]::WriteAllText($file, $text, [System.Text.UTF8Encoding]::new($false))
+            $scrubbedCount++
+        }
+    }
+
+    return $scrubbedCount
+}
+
+# =====================================================================
 #  DOCTOR / TOOLCHAIN INSPECTION
 # =====================================================================
 
@@ -651,7 +710,7 @@ function Invoke-FluxBuild {
 
             'Clean' {
                 $sw = [System.Diagnostics.Stopwatch]::StartNew()
-                Write-FluxStep -Context $ctx -State 'Run' -Label 'Clean' -Detail 'Removing bin/, obj/, artifacts/'
+                Write-FluxStep -Context $ctx -State 'Run' -Label 'Clean' -Detail 'Removing bin/, obj/, artifacts/, TestResults/'
                 $dirsToClean = [System.Collections.Generic.List[string]]::new()
                 foreach ($sub in @('src', 'tests')) {
                     $baseDir = [System.IO.Path]::Combine($repoRoot, $sub)
@@ -666,9 +725,11 @@ function Invoke-FluxBuild {
                         }
                     }
                 }
-                $artifactsDir = [System.IO.Path]::Combine($repoRoot, 'artifacts')
-                if ([System.IO.Directory]::Exists($artifactsDir)) {
-                    $dirsToClean.Add($artifactsDir)
+                foreach ($topLeaf in @('artifacts', 'TestResults')) {
+                    $candidateTop = [System.IO.Path]::Combine($repoRoot, $topLeaf)
+                    if ([System.IO.Directory]::Exists($candidateTop)) {
+                        $dirsToClean.Add($candidateTop)
+                    }
                 }
 
                 foreach ($dir in $dirsToClean) {
@@ -722,6 +783,7 @@ function Invoke-FluxBuild {
             }
 
             'Test' {
+                $resultsDir = [System.IO.Path]::Combine($repoRoot, 'TestResults')
                 $testArgs = [System.Collections.Generic.List[string]]::new()
                 $testArgs.Add('test')
 
@@ -747,25 +809,88 @@ function Invoke-FluxBuild {
                     $testArgs.Add($Filter)
                 }
 
+                if ($Ci.IsPresent) {
+                    [void][System.IO.Directory]::CreateDirectory($resultsDir)
+                    $testArgs.Add('--results-directory')
+                    $testArgs.Add($resultsDir)
+                    $testArgs.Add('--report-xunit-junit')
+                    $testArgs.Add('--report-xunit-trx')
+                    $testArgs.Add('--report-xunit-ctrf')
+                    if ($Project -ine 'All') {
+                        $testArgs.Add('--report-xunit-junit-filename')
+                        $testArgs.Add("junit-$Project.xml")
+                        $testArgs.Add('--report-xunit-trx-filename')
+                        $testArgs.Add("trx-$Project.trx")
+                        $testArgs.Add('--report-xunit-ctrf-filename')
+                        $testArgs.Add("ctrf-$Project.json")
+                    }
+                }
+
                 $envMap = @{}
                 if (-not [string]::IsNullOrWhiteSpace($Hardware)) {
                     $envMap['FLUXENCODER_HARDWARE'] = $Hardware
                 }
 
-                $res = Invoke-FluxDotNet -Context $ctx -StepName "Test ($Project)" -Arguments $testArgs.ToArray() -WorkingDirectory $repoRoot -EnvironmentOverrides $envMap
-                $results.Add($res)
+                try {
+                    $res = Invoke-FluxDotNet -Context $ctx -StepName "Test ($Project)" -Arguments $testArgs.ToArray() -WorkingDirectory $repoRoot -EnvironmentOverrides $envMap
+                    $results.Add($res)
+                }
+                finally {
+                    if ($Ci.IsPresent -and [System.IO.Directory]::Exists($resultsDir)) {
+                        $scrubbed = Protect-FluxTestArtifacts -Directory $resultsDir -RepoRoot $repoRoot
+                        Write-FluxStep -Context $ctx -State 'Ok' -Label 'Sanitize' -Detail "Scrubbed local paths and secrets in $scrubbed artifact file(s)"
+                    }
+                }
             }
 
             'Audit' {
+                $sw = [System.Diagnostics.Stopwatch]::StartNew()
                 $auditArgs = @(
                     'list',
                     $slnPath,
                     'package',
                     '--vulnerable',
-                    '--include-transitive'
+                    '--include-transitive',
+                    '--format',
+                    'json'
                 )
-                $res = Invoke-FluxDotNet -Context $ctx -StepName 'Audit' -Arguments $auditArgs -WorkingDirectory $repoRoot
-                $results.Add($res)
+                Write-FluxStep -Context $ctx -State 'Run' -Label 'Audit' -Detail ('dotnet ' + ($auditArgs -join ' '))
+                $rawJson = & dotnet @auditArgs
+                $exitCode = $LASTEXITCODE
+                $sw.Stop()
+                $elapsed = ('{0:0.00} s' -f $sw.Elapsed.TotalSeconds)
+
+                if ($exitCode -ne 0) {
+                    Write-FluxStep -Context $ctx -State 'Fail' -Label 'Audit' -Detail "exit $exitCode ($elapsed)"
+                    throw "Step 'Audit' failed with exit code $exitCode."
+                }
+
+                $auditReport = ($rawJson -join "`n") | ConvertFrom-Json
+                $vulnCount = 0
+                foreach ($proj in $auditReport.projects) {
+                    $fwProp = $proj.PSObject.Properties['frameworks']
+                    if ($null -eq $fwProp -or $null -eq $fwProp.Value) { continue }
+                    foreach ($fw in $fwProp.Value) {
+                        foreach ($propName in @('topLevelPackages', 'transitivePackages')) {
+                            $pkgProp = $fw.PSObject.Properties[$propName]
+                            if ($null -eq $pkgProp -or $null -eq $pkgProp.Value) { continue }
+                            foreach ($pkg in $pkgProp.Value) {
+                                $vProp = $pkg.PSObject.Properties['vulnerabilities']
+                                if ($null -ne $vProp -and $null -ne $vProp.Value -and $vProp.Value.Count -gt 0) {
+                                    $vulnCount += $vProp.Value.Count
+                                    Write-FluxStep -Context $ctx -State 'Fail' -Label 'Vulnerable' -Detail "$($pkg.id) $($pkg.resolvedVersion) ($($vProp.Value.Count) advisory)"
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if ($vulnCount -gt 0) {
+                    throw "Step 'Audit' found $vulnCount vulnerable package advisory(ies)."
+                }
+
+                Write-FluxStep -Context $ctx -State 'Ok' -Label 'Audit' -Detail "0 vulnerable packages across $($auditReport.projects.Count) projects ($elapsed)"
+                $results.Add([PSCustomObject]@{ Step = 'Audit'; Status = 'Succeeded'; Elapsed = $sw.Elapsed; Command = 'dotnet list package --vulnerable' })
             }
 
             'Publish' {

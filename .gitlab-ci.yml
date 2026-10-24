@@ -1,0 +1,219 @@
+# =============================================================================
+#  FluxEncoder — GitLab CI Pipeline (CI-E014: TSKE014.1 - TSKE014.5)
+# =============================================================================
+#  Container image: sgkens/phellams-automator pinned by version tag (or digest).
+#  Provides .NET 8 (.NET 8.0.424) and .NET 10 (.NET 10.0.400+) SDKs, PowerShell 7,
+#  FFmpeg/FFprobe, SQLite3, and NativeAOT prerequisites.
+# =============================================================================
+
+variables:
+  AUTOMATOR_IMAGE: "sgkens/phellams-automator"
+  AUTOMATOR_VERSION: "10.0.400"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+  NUGET_PACKAGES: "${CI_PROJECT_DIR}/.nuget/packages"
+  NO_COLOR: "1"
+
+default:
+  image: ${AUTOMATOR_IMAGE}:${AUTOMATOR_VERSION}
+  cache:
+    key:
+      files:
+        - Directory.Packages.props
+        - src/FluxEncoder.Core/packages.lock.json
+        - src/FluxEncoder.Infrastructure/packages.lock.json
+        - src/FluxEncoder.Cli/packages.lock.json
+    paths:
+      - .nuget/packages/
+    policy: pull-push
+
+stages:
+  - verify
+  - build
+  - test
+  - coverage
+
+# -----------------------------------------------------------------------------
+#  STAGE: verify (TSKE014.1, TSKE014.3, TSKE014.4)
+# -----------------------------------------------------------------------------
+
+toolchain:linux:
+  stage: verify
+  script:
+    - pwsh -NoLogo -NoProfile -Command '
+        $sdks = @(dotnet --list-sdks);
+        Write-Host "Installed .NET SDKs:";
+        $sdks | ForEach-Object { Write-Host "  $_" };
+        if (-not ($sdks -match "^10\.0\.")) { throw ".NET 10 SDK is required by global.json but was not found in the runner image." };
+        if ($sdks -match "^8\.0\.") { Write-Host "Verified side-by-side .NET 8 SDK in phellams-automator image." };
+      '
+    - pwsh -NoLogo -NoProfile -File ./bootstrap.ps1 -CheckOnly -NoColor
+    - pwsh -NoLogo -NoProfile -File ./fluxb.ps1 Doctor -NoColor
+
+restore-and-audit:linux:
+  stage: verify
+  script:
+    - pwsh -NoLogo -NoProfile -File ./fluxb.ps1 Restore,Audit -Ci -NoColor
+
+format:linux:
+  stage: verify
+  needs:
+    - job: restore-and-audit:linux
+  script:
+    - pwsh -NoLogo -NoProfile -File ./fluxb.ps1 Restore,Format -Ci -NoColor
+    - pwsh -NoLogo -NoProfile -Command '
+        if (Get-Module -ListAvailable -Name PSScriptAnalyzer) {
+          $findings = @(Invoke-ScriptAnalyzer -Path ./fluxb.ps1, ./bootstrap.ps1 -Severity Error);
+          if ($findings.Count -gt 0) { $findings | Format-Table -AutoSize; exit 1 }
+        }
+      '
+
+# -----------------------------------------------------------------------------
+#  STAGE: build (TSKE014.1, TSKE014.4)
+# -----------------------------------------------------------------------------
+
+build:linux:
+  stage: build
+  needs:
+    - job: restore-and-audit:linux
+    - job: format:linux
+  script:
+    - pwsh -NoLogo -NoProfile -File ./fluxb.ps1 Restore,Build -Configuration Release -Ci -AutoVersion -NoColor
+  artifacts:
+    expire_in: 1 day
+    paths:
+      - src/*/bin/Release/
+      - src/*/obj/
+      - tests/*/bin/Release/
+      - tests/*/obj/
+
+# -----------------------------------------------------------------------------
+#  STAGE: test (TSKE014.1, TSKE014.2, TSKE014.5)
+# -----------------------------------------------------------------------------
+
+unit-test:linux:
+  stage: test
+  needs:
+    - job: build:linux
+      artifacts: true
+  script:
+    - pwsh -NoLogo -NoProfile -File ./fluxb.ps1 Test -Project Core -Configuration Release -NoBuild -Ci -NoColor
+  artifacts:
+    when: always
+    expire_in: 14 days
+    reports:
+      junit: TestResults/junit-Core.xml
+    paths:
+      - TestResults/junit-Core.xml
+      - TestResults/trx-Core.trx
+      - TestResults/ctrf-Core.json
+
+integration-test:linux:
+  stage: test
+  needs:
+    - job: build:linux
+      artifacts: true
+  script:
+    - pwsh -NoLogo -NoProfile -File ./fluxb.ps1 Test -Project Infrastructure -Configuration Release -NoBuild -Ci -NoColor
+    - pwsh -NoLogo -NoProfile -File ./fluxb.ps1 Test -Project Cli -Configuration Release -NoBuild -Ci -NoColor
+  artifacts:
+    when: always
+    expire_in: 14 days
+    reports:
+      junit:
+        - TestResults/junit-Infrastructure.xml
+        - TestResults/junit-Cli.xml
+    paths:
+      - TestResults/junit-Infrastructure.xml
+      - TestResults/trx-Infrastructure.trx
+      - TestResults/ctrf-Infrastructure.json
+      - TestResults/junit-Cli.xml
+      - TestResults/trx-Cli.trx
+      - TestResults/ctrf-Cli.json
+
+# -----------------------------------------------------------------------------
+#  Multi-platform Matrix: Windows & macOS Gate (TSKE014.2)
+# -----------------------------------------------------------------------------
+
+test:windows:
+  stage: test
+  tags:
+    - windows
+  script:
+    - pwsh -NoLogo -NoProfile -File ./bootstrap.ps1 -CheckOnly -NoColor
+    - pwsh -NoLogo -NoProfile -File ./fluxb.ps1 Restore,Audit,Format,Build -Configuration Release -Ci -AutoVersion -NoColor
+    - pwsh -NoLogo -NoProfile -File ./fluxb.ps1 Test -Project Core -Configuration Release -NoBuild -Ci -NoColor
+    - pwsh -NoLogo -NoProfile -File ./fluxb.ps1 Test -Project Infrastructure -Configuration Release -NoBuild -Ci -NoColor
+    - pwsh -NoLogo -NoProfile -File ./fluxb.ps1 Test -Project Cli -Configuration Release -NoBuild -Ci -NoColor
+  artifacts:
+    when: always
+    expire_in: 14 days
+    reports:
+      junit:
+        - TestResults/junit-Core.xml
+        - TestResults/junit-Infrastructure.xml
+        - TestResults/junit-Cli.xml
+    paths:
+      - TestResults/
+
+test:macos:
+  stage: test
+  tags:
+    - macos
+  rules:
+    - if: '$ENABLE_MACOS_CI == "true"'
+    - when: manual
+      allow_failure: true
+  script:
+    - pwsh -NoLogo -NoProfile -File ./fluxb.ps1 Doctor -NoColor
+    - pwsh -NoLogo -NoProfile -File ./fluxb.ps1 Restore,Audit,Format,Build -Configuration Release -Ci -AutoVersion -NoColor
+    - pwsh -NoLogo -NoProfile -File ./fluxb.ps1 Test -Project Core -Configuration Release -NoBuild -Ci -NoColor
+    - pwsh -NoLogo -NoProfile -File ./fluxb.ps1 Test -Project Infrastructure -Configuration Release -NoBuild -Ci -NoColor
+    - pwsh -NoLogo -NoProfile -File ./fluxb.ps1 Test -Project Cli -Configuration Release -NoBuild -Ci -NoColor
+  artifacts:
+    when: always
+    expire_in: 14 days
+    reports:
+      junit:
+        - TestResults/junit-Core.xml
+        - TestResults/junit-Infrastructure.xml
+        - TestResults/junit-Cli.xml
+    paths:
+      - TestResults/
+
+# -----------------------------------------------------------------------------
+#  STAGE: coverage (TSKE014.5)
+# -----------------------------------------------------------------------------
+
+coverage:linux:
+  stage: coverage
+  needs:
+    - job: build:linux
+      artifacts: true
+    - job: unit-test:linux
+      artifacts: true
+    - job: integration-test:linux
+      artifacts: true
+  script:
+    - pwsh -NoLogo -NoProfile -Command '
+        . ./fluxb.ps1;
+        $repoRoot = [System.IO.Path]::GetFullPath(".");
+        $resultsDir = [System.IO.Path]::Combine($repoRoot, "TestResults");
+        [void][System.IO.Directory]::CreateDirectory($resultsDir);
+        $covTool = Get-Command -Name "dotnet-coverage" -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1;
+        if ($null -ne $covTool) {
+          $covOut = [System.IO.Path]::Combine($resultsDir, "coverage.cobertura.xml");
+          & $covTool.Source collect --output-format cobertura --output $covOut "dotnet test --solution fluxencoder.sln -c Release --no-build";
+          if ($LASTEXITCODE -ne 0) { throw "dotnet-coverage failed with exit code $LASTEXITCODE." }
+        }
+        else {
+          Write-Host "dotnet-coverage tool not installed in this image; preserving sanitized JUnit/TRX/CTRF test artifacts.";
+        }
+        $scrubbed = Protect-FluxTestArtifacts -Directory $resultsDir -RepoRoot $repoRoot;
+        Write-Host "Sanitized $scrubbed report file(s) in TestResults/.";
+      '
+  artifacts:
+    when: always
+    expire_in: 14 days
+    paths:
+      - TestResults/

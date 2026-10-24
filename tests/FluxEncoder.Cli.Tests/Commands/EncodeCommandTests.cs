@@ -296,4 +296,25 @@ public sealed class EncodeCommandTests : IAsyncLifetime
         Assert.DoesNotContain('\u001b', run.Out + run.Error);
         Assert.Contains("evil?]0;pwned??[31m.mkv", run.Out, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public async Task Cancelled_ExitsWith130AndLeavesNoPartialOutput()
+    {
+        SkipWithoutFFmpeg();
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var output = new StringWriter();
+        var error = new StringWriter();
+        var host = new CliHost(output, error, _ => null, ErrorIsTerminal: false) { Paths = Paths };
+
+        var exitCode = await CliApplication.RunAsync(
+            ["encode", PathOf("clip.mkv"), "-o", PathOf("cancelled.mkv")],
+            host,
+            cts.Token);
+
+        Assert.Equal(130, exitCode);
+        Assert.False(File.Exists(PathOf("cancelled.mkv")));
+        Assert.Empty(Directory.GetFiles(_directory, ".*partial*"));
+    }
 }

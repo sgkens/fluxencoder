@@ -258,4 +258,31 @@ public sealed class FFprobeJsonParserTests
         Assert.Empty(media.FormatNames);
         Assert.Null(media.Duration);
     }
+
+    [Fact]
+    public void VariableFrameRate_DistinguishesAverageFromBaseFrameRate()
+    {
+        const string Json = """
+            {
+              "streams": [
+                {
+                  "index": 0,
+                  "codec_type": "video",
+                  "codec_name": "hevc",
+                  "width": 1920,
+                  "height": 1080,
+                  "pix_fmt": "yuv420p10le",
+                  "avg_frame_rate": "24000/1001",
+                  "r_frame_rate": "120/1"
+                }
+              ]
+            }
+            """;
+
+        var video = FFprobeJsonParser.Parse(Json, "vfr.mkv").VideoStreams.Single();
+
+        Assert.Equal(new Rational(24000, 1001), video.AverageFrameRate);
+        Assert.Equal(new Rational(120, 1), video.BaseFrameRate);
+        Assert.NotEqual(video.AverageFrameRate, video.BaseFrameRate);
+    }
 }

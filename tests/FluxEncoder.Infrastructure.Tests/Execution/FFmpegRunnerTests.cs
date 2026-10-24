@@ -157,4 +157,98 @@ public sealed class FFmpegRunnerTests : IDisposable
         Assert.True(run.Succeeded);
         Assert.True(run.StandardError.Length <= 4096);
     }
+
+    private string WriteFakeChild(string name, string unixScriptBody)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Skip("Uses a POSIX shell script fake child.");
+            return string.Empty;
+        }
+
+        var path = Out(name);
+        File.WriteAllText(path, "#!/bin/sh\n" + unixScriptBody + "\n");
+        File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        return path;
+    }
+
+    [Fact]
+    public async Task FakeChild_InterleavesProgressStdoutWithHeavyStderrWithoutDeadlock()
+    {
+        var fake = WriteFakeChild("interleaved.sh", """
+            printf 'frame=10\nout_time_us=1000000\ntotal_size=1024\nprogress=continue\n'
+            i=0
+            while [ $i -lt 4000 ]; do
+                printf '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n' >&2
+                i=$((i + 1))
+            done
+            printf 'frame=25\nout_time_us=2000000\ntotal_size=4096\nprogress=end\n'
+            printf 'TAIL_MARKER\n' >&2
+            """);
+
+        var collector = new Collector();
+        var run = (await FFmpegRunner.RunAsync(
+            fake,
+            new FFmpegInvocation(["-i", "in.mkv", "out.mkv"]),
+            collector,
+            new FFmpegRunOptions { MaxErrorChars = 2048 },
+            Token)).Value!;
+
+        Assert.True(run.Succeeded);
+        Assert.Equal(2, collector.Reports.Count);
+        Assert.True(run.LastProgress!.IsFinal);
+        Assert.Equal(25, run.LastProgress.Frame);
+        Assert.True(run.StandardError.Length <= 2048);
+        Assert.EndsWith("TAIL_MARKER\n", run.StandardError, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task FakeChild_ExitsEarlyBeforeProgressEnd_IsNotSucceeded()
+    {
+        var fake = WriteFakeChild("early-exit.sh", """
+            printf 'frame=5\nout_time_us=500000\ntotal_size=512\nprogress=continue\n'
+            printf 'Conversion failed!\n' >&2
+            exit 1
+            """);
+
+        var run = (await FFmpegRunner.RunAsync(fake, new FFmpegInvocation(["-i", "in.mkv", "out.mkv"]), cancellationToken: Token)).Value!;
+
+        Assert.False(run.Succeeded);
+        Assert.Equal(1, run.ExitCode);
+        Assert.Equal(RunTermination.Exited, run.Termination);
+        Assert.False(run.LastProgress!.IsFinal);
+        Assert.Equal(5, run.LastProgress.Frame);
+        Assert.Contains("Conversion failed!", run.StandardError, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task FakeChild_IgnoresGracefulQuitOnCancellation_IsKilledAfterGracePeriod()
+    {
+        var fake = WriteFakeChild("ignore-quit.sh", """
+            printf 'frame=1\nout_time_us=100000\ntotal_size=128\nprogress=continue\n'
+            sleep 30
+            """);
+
+        var collector = new Collector();
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(Token);
+        var running = FFmpegRunner.RunAsync(
+            fake,
+            new FFmpegInvocation(["-i", "in.mkv", "out.mkv"]),
+            collector,
+            new FFmpegRunOptions { GraceTimeout = TimeSpan.FromMilliseconds(150) },
+            cts.Token);
+
+        while (collector.Reports.IsEmpty)
+        {
+            await Task.Delay(25, Token);
+        }
+
+        await cts.CancelAsync();
+        var run = (await running).Value!;
+
+        Assert.Equal(RunTermination.Stopped, run.Termination);
+        Assert.True(run.Killed);
+        Assert.False(run.StoppedCleanly);
+        Assert.False(run.Succeeded);
+    }
 }

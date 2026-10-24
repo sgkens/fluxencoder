@@ -268,4 +268,25 @@ public sealed class HistoryTests : IDisposable
 
         Assert.Equal([0.1, 1.2, 1.3], recorder.Samples.Select(s => s.ElapsedSeconds));
     }
+
+    [Fact]
+    public async Task Transaction_RollsBackOnFailure()
+    {
+        var (database, _) = await HistoryDatabase.OpenAsync(DatabasePath, Token);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            database.WriteAsync<int>(async (connection, transaction) =>
+            {
+                await using var insert = connection.CreateCommand();
+                insert.Transaction = transaction;
+                insert.CommandText =
+                    "INSERT INTO runs (id, started_utc, finished_utc, input, output, outcome, exit_code, attempts, elapsed_seconds) " +
+                    "VALUES ('rolled-back', '2026-10-21T00:00:00.0000000Z', '2026-10-21T00:00:01.0000000Z', 'a.mkv', 'b.mkv', 'succeeded', 0, 1, 1.0);";
+                await insert.ExecuteNonQueryAsync(Token);
+
+                throw new InvalidOperationException("Simulated mid-transaction failure.");
+            }, Token));
+
+        Assert.Equal(0L, await ScalarAsync("SELECT COUNT(*) FROM runs WHERE id = 'rolled-back';"));
+    }
 }

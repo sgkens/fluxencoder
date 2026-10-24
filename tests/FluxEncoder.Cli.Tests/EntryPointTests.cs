@@ -29,6 +29,26 @@ public sealed class EntryPointTests
     }
 
     [Fact]
+    public void Version_ComesFromAssemblyMetadata()
+    {
+        var cli = typeof(CliApplication).Assembly;
+        var informational = cli.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+        var output = new StringWriter();
+        var error = new StringWriter();
+
+        var exitCode = CliApplication.BuildRootCommand()
+            .Parse(["--version"])
+            .Invoke(new InvocationConfiguration { Output = output, Error = error });
+
+        Assert.Equal(0, exitCode);
+        Assert.NotNull(informational);
+        Assert.StartsWith("0.1.0", informational, StringComparison.Ordinal);
+        Assert.DoesNotContain("NativeAOT", informational, StringComparison.OrdinalIgnoreCase);
+        Assert.StartsWith("0.1.0", output.ToString().Trim(), StringComparison.Ordinal);
+        Assert.Empty(error.ToString());
+    }
+
+    [Fact]
     public void UnknownCommand_FailsWithNonZeroExitCode()
     {
         var exitCode = CliApplication.BuildRootCommand()

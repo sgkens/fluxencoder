@@ -44,8 +44,8 @@ internal sealed record OutputSettings(bool Json, bool Quiet, bool Verbose, bool 
         var color = Color && isTerminal;
         var console = AnsiConsole.Create(new AnsiConsoleSettings
         {
-            Ansi = isTerminal && (color || interactive) ? AnsiSupport.Detect : AnsiSupport.No,
-            ColorSystem = color ? ColorSystemSupport.Detect : ColorSystemSupport.NoColors,
+            Ansi = isTerminal && (color || interactive) ? AnsiSupport.Yes : AnsiSupport.No,
+            ColorSystem = color ? ColorSystemSupport.EightBit : ColorSystemSupport.NoColors,
             Interactive = interactive ? InteractionSupport.Yes : InteractionSupport.No,
             Out = new AnsiConsoleOutput(writer),
         });

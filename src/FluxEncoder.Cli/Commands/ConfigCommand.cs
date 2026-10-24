@@ -1,5 +1,6 @@
 using System.CommandLine;
 using FluxEncoder.Cli.Hosting;
+using FluxEncoder.Cli.Rendering;
 using FluxEncoder.Core.Results;
 using FluxEncoder.Infrastructure.Configuration;
 
@@ -18,9 +19,9 @@ internal static class ConfigCommand
         path.SetAction(_ =>
         {
             var paths = host.Paths;
-            host.Out.WriteLine($"settings  {paths.SettingsFile}");
-            host.Out.WriteLine($"history   {paths.HistoryDatabase}");
-            host.Out.WriteLine($"cache     {paths.Cache}");
+            host.Out.WriteLine(TerminalText.Safe($"settings  {paths.SettingsFile}"));
+            host.Out.WriteLine(TerminalText.Safe($"history   {paths.HistoryDatabase}"));
+            host.Out.WriteLine(TerminalText.Safe($"cache     {paths.Cache}"));
             return (int)ExitCode.Success;
         });
 
@@ -30,7 +31,7 @@ internal static class ConfigCommand
             var (settings, warnings) = SettingsStore.Load(host.Paths.SettingsFile);
             foreach (var warning in warnings)
             {
-                host.Error.WriteLine(warning);
+                host.Error.WriteLine(TerminalText.Safe(warning));
             }
 
             host.Out.Write(SettingsStore.ToJson(settings));
@@ -44,12 +45,12 @@ internal static class ConfigCommand
             var file = host.Paths.SettingsFile;
             if (File.Exists(file) && !result.GetValue(force))
             {
-                host.Error.WriteLine($"{file} already exists. Use --force to replace it (the old file is kept as .bak).");
+                host.Error.WriteLine(TerminalText.Safe($"{file} already exists. Use --force to replace it (the old file is kept as .bak)."));
                 return (int)ExitCode.OutputError;
             }
 
             SettingsStore.Save(file, SettingsStore.Template);
-            host.Out.WriteLine($"Wrote {file}");
+            host.Out.WriteLine(TerminalText.Safe($"Wrote {file}"));
             return (int)ExitCode.Success;
         });
 

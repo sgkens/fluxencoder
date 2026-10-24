@@ -21,6 +21,12 @@ internal sealed class HumanReporter : IReporter
     private readonly IAnsiConsole _out;
     private readonly IAnsiConsole _error;
 
+    // Outcomes so far, for the batch row. Jobs run one at a time, so plain fields suffice.
+    private int _succeeded;
+    private int _skipped;
+    private int _failed;
+    private bool _dryRun;
+
     public HumanReporter(CliHost host, OutputSettings settings)
     {
         ArgumentNullException.ThrowIfNull(host);
@@ -58,21 +64,39 @@ internal sealed class HumanReporter : IReporter
             return await run(new MilestoneProgress(this)).ConfigureAwait(false);
         }
 
+        var layout = ProgressLayout.For(_error.Profile.Width);
+        var columns = new List<ProgressColumn> { new TaskDescriptionColumn { Alignment = Justify.Left } };
+        if (layout.ShowBar)
+        {
+            columns.Add(new ProgressBarColumn { Width = layout.BarWidth });
+            columns.Add(new PercentageColumn());
+        }
+
+        if (layout.ShowRemaining)
+        {
+            columns.Add(new RemainingTimeColumn());
+        }
+
+        columns.Add(new SpinnerColumn(Spinner.Known.Line));
+
         JobReport? report = null;
         await _error.Progress()
             .AutoClear(true)
             .HideCompleted(true)
-            .Columns(
-                new TaskDescriptionColumn { Alignment = Justify.Left },
-                new ProgressBarColumn(),
-                new PercentageColumn(),
-                new RemainingTimeColumn(),
-                new SpinnerColumn(Spinner.Known.Line))
+            .Columns([.. columns])
             .StartAsync(async context =>
             {
-                var task = context.AddTask(Markup.Escape(TerminalText.Safe(title)), maxValue: 1.0);
+                ProgressTask? batch = null;
+                if (count > 1)
+                {
+                    batch = context.AddTask(Fit(ProgressView.Batch(index, count, _succeeded, _skipped, _failed, _dryRun), string.Empty, layout), maxValue: count);
+                    batch.Value = index;
+                }
+
+                var job = new JobView(TerminalText.Safe(label), layout, Symbols, batch, index);
+                var task = context.AddTask(job.Describe(string.Empty, null), maxValue: 1.0);
                 task.IsIndeterminate = true;
-                report = await run(new SpectreProgress(task, title)).ConfigureAwait(false);
+                report = await run(new SpectreProgress(task, job)).ConfigureAwait(false);
                 if (report.Result.Outcome == JobOutcome.Succeeded)
                 {
                     task.IsIndeterminate = false;
@@ -80,6 +104,7 @@ internal sealed class HumanReporter : IReporter
                 }
 
                 task.StopTask();
+                batch?.StopTask();
             }).ConfigureAwait(false);
 
         return report!;
@@ -89,6 +114,13 @@ internal sealed class HumanReporter : IReporter
     {
         ArgumentNullException.ThrowIfNull(report);
         var result = report.Result;
+        _dryRun = dryRun;
+        switch (result.Outcome)
+        {
+            case JobOutcome.Succeeded: _succeeded++; break;
+            case JobOutcome.Skipped: _skipped++; break;
+            default: _failed++; break;
+        }
 
         if (dryRun && result.Outcome == JobOutcome.Succeeded && report.Planned?.Plan is { } plan)
         {
@@ -186,21 +218,49 @@ internal sealed class HumanReporter : IReporter
         console.Write(new Text(TerminalText.Safe(text) + "\n", style));
 
     /// <summary>
+    /// Fits a description to the layout and escapes it for Spectre markup, in that order: escaping doubles brackets,
+    /// which would otherwise count towards the width.
+    /// </summary>
+    private string Fit(string title, string details, ProgressLayout layout) =>
+        Markup.Escape(ProgressView.Describe(title, details, layout.DescriptionCells, Symbols));
+
+    /// <summary>
+    /// One job's row in the animated view, and its share of the batch row when there is one.
+    /// </summary>
+    private sealed record JobView(string Title, ProgressLayout Layout, UiSymbols Symbols, ProgressTask? Batch, int Index)
+    {
+        public string Describe(string details, double? fraction)
+        {
+            // Without a bar column the percentage moves into the description, ahead of the other details.
+            if (!Layout.ShowBar && fraction is { } known)
+            {
+                var percent = ((int)(known * 100)).ToString(CultureInfo.InvariantCulture) + "%";
+                details = details.Length > 0 ? $"{percent}  {details}" : percent;
+            }
+
+            return Markup.Escape(ProgressView.Describe(Title, details, Layout.DescriptionCells, Symbols));
+        }
+    }
+
+    /// <summary>
     /// Progress for animated terminals: a bar with ETA for finite inputs, a spinner with elapsed media time, speed,
     /// and size for inputs without a known length.
     /// </summary>
-    private sealed class SpectreProgress(ProgressTask task, string title) : IProgress<JobProgress>
+    private sealed class SpectreProgress(ProgressTask task, JobView view) : IProgress<JobProgress>
     {
         public void Report(JobProgress value)
         {
-            var details = Details(value);
             if (value.Fraction is { } fraction)
             {
                 task.IsIndeterminate = false;
                 task.Value = fraction;
+                if (view.Batch is { } batch)
+                {
+                    batch.Value = view.Index + fraction;
+                }
             }
 
-            task.Description = Markup.Escape(TerminalText.Safe(details.Length > 0 ? $"{title}  {details}" : title));
+            task.Description = view.Describe(ProgressView.Details(value), value.Fraction);
         }
     }
 
@@ -226,7 +286,7 @@ internal sealed class HumanReporter : IReporter
                     if (fraction >= _nextQuarter / 4.0 && _nextQuarter <= 4)
                     {
                         _nextQuarter = Math.Min(4, (int)(fraction * 4)) + 1;
-                        line = $"{(int)(fraction * 100)}%  {Details(value)}";
+                        line = $"{(int)(fraction * 100)}%  {ProgressView.Details(value)}";
                     }
                 }
                 else if (!_explained)
@@ -237,7 +297,7 @@ internal sealed class HumanReporter : IReporter
                 else if (DateTime.UtcNow >= _nextTimed)
                 {
                     _nextTimed = DateTime.UtcNow + MilestoneInterval;
-                    line = Details(value);
+                    line = ProgressView.Details(value);
                 }
             }
 
@@ -246,36 +306,5 @@ internal sealed class HumanReporter : IReporter
                 WriteLine(reporter._error, Indent(line.TrimEnd()), Palette.Muted);
             }
         }
-    }
-
-    private static string Details(JobProgress value)
-    {
-        var parts = new List<string>();
-        if (value.PassCount > 1)
-        {
-            parts.Add($"pass {value.Pass}/{value.PassCount}");
-        }
-
-        if (value.Current.ProcessedTime is { } time)
-        {
-            parts.Add(time.ToString(@"h\:mm\:ss", CultureInfo.InvariantCulture));
-        }
-
-        if (value.Current.Speed is { } speed)
-        {
-            parts.Add(speed.ToString("0.0", CultureInfo.InvariantCulture) + "x");
-        }
-
-        if (value.Current.TotalSizeBytes is { } size)
-        {
-            parts.Add((size / 1024.0 / 1024.0).ToString("0.0", CultureInfo.InvariantCulture) + " MB");
-        }
-
-        if (value.Attempt > 1)
-        {
-            parts.Add($"attempt {value.Attempt}");
-        }
-
-        return string.Join("  ", parts);
     }
 }

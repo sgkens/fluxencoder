@@ -139,10 +139,10 @@ internal static class InfoCommand
                 return;
             }
 
-            var widths = Enumerable.Range(0, safe[0].Length).Select(i => safe.Max(r => r[i].Length)).ToArray();
+            var widths = Enumerable.Range(0, safe[0].Length).Select(i => safe.Max(r => DisplayWidth.Of(r[i]))).ToArray();
             foreach (var row in safe)
             {
-                builder.Append("  ").Append(string.Join("  ", row.Select((cell, i) => cell.PadRight(widths[i]))).TrimEnd()).Append('\n');
+                builder.Append("  ").Append(string.Join("  ", row.Select((cell, i) => DisplayWidth.PadRight(cell, widths[i]))).TrimEnd()).Append('\n');
             }
         }
     }

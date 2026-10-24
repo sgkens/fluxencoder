@@ -12,6 +12,12 @@
     <MSBuildTreatWarningsAsErrors>true</MSBuildTreatWarningsAsErrors>
   </PropertyGroup>
 
+  <!-- The product version, set only here. The version option reads it from assembly metadata, with the commit appended
+       by the SDK. Release builds pass -p:Version=X.Y.Z (REL-E015); until the first release it stays below 1.0. -->
+  <PropertyGroup>
+    <VersionPrefix>0.1.0</VersionPrefix>
+  </PropertyGroup>
+
   <!-- Reproducible restore: commit packages.lock.json; CI restores in locked mode. -->
   <PropertyGroup>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>

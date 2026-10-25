@@ -1,0 +1,148 @@
+---
+layout: layouts/doc.njk
+title: CLI Command & Exit Code Reference
+description: Authoritative System.CommandLine command tree, option precedence rules, JSON output contracts, signal handling, and process exit codes.
+category: CLI-02 // INTERFACES & WORKFLOWS
+sourcePath: src/FluxEncoder.Cli/CliApplication.cs
+tracker: CLI-E007
+status: Verified Contract
+---
+{% from "components/terminal.njk" import terminalFrame %}
+{% from "components/callout.njk" import callout %}
+{% from "components/spec-table.njk" import specTable %}
+
+<h2>Registered Command Tree</h2>
+<p>
+  <code>FluxEncoder.Cli.CliApplication</code> registers commands only once they are implemented and covered by automated tests (<code>TSKE007.8</code>). Parsing is handled by <code>System.CommandLine</code> (<a href="/adr/0002-cli-framework-and-package-policy/">ADR 0002</a>).
+</p>
+
+{{ specTable({
+  caption: "REGISTERED PRODUCTION COMMANDS (src/FluxEncoder.Cli/Commands/)",
+  headers: ["Command", "Source Handler", "Summary"],
+  codeCols: [0, 1],
+  rows: [
+    ["encode", "EncodeCommand.cs", "Probe, plan, and transcode one or more inputs (files, directories, URLs, or <code>remote://</code> paths) with hardware verification and atomic output staging."],
+    ["apply", "ApplyCommand.cs", "Validate and execute a declarative <code>Fluxfile.yaml</code> or <code>Fluxfile.json</code> job graph in dependency order."],
+    ["info", "InfoCommand.cs", "Inspect media streams via FFprobe and export reports as terminal text, <code>json</code>, <code>yaml</code>, <code>markdown</code>, <code>html</code>, or an <code>svg</code> badge."],
+    ["config", "ConfigCommand.cs", "Print platform configuration paths (<code>config path</code>), initialize <code>settings.json</code> atomically (<code>config init</code>), or validate settings."],
+    ["history", "HistoryCommand.cs", "List recorded runs (<code>history list</code>), inspect telemetry samples (<code>history show</code>), compare two runs (<code>history compare</code>), or prune records (<code>history clear</code>)."],
+    ["remote", "RemoteCommand.cs", "Manage named remote source aliases (<code>remote list</code>, <code>remote add</code>, <code>remote remove</code>) and store secrets in the OS credential store."]
+  ]
+}) }}
+
+{{ callout({
+  kind: "note",
+  title: "SCHEDULED COMMANDS (ADV-E012)",
+  body: "<p>Additional commands from the concept inventory—<code>merge</code> (lossless stream concatenation), <code>thumb</code> (contact-sheet generation), and <code>audit</code> (black-frame and silence QA scanning)—are tracked under <code>ADV-E012</code> and withheld from the root command tree until their end-to-end tests are complete.</p>"
+}) }}
+
+<h2>Primary Command Workflows</h2>
+
+<h3>1. <code>encode</code> — Single and Batch Transcoding</h3>
+
+{{ terminalFrame({
+  title: "bash — encode workflow examples",
+  stream: "stdout",
+  exitCode: 0,
+  code: "# Plan and execute an HEVC hardware encode with automatic fallback
+flux encode --input raw/interview.mov --output out/interview.mp4 --hardware nvidia --codec hevc --quality balanced
+
+# Dry-run inspection: probe source and print exact FFmpeg ArgumentList without writing files
+flux encode --input raw/interview.mov --codec av1 --quality high --dry-run
+
+# Machine-readable JSON output on stdout (human progress and notices stay on stderr)
+flux encode --input raw/interview.mov --output out/interview.mkv --codec hevc --json"
+}) }}
+
+<h3>2. Option Precedence & Settings Merge</h3>
+<p>
+  For <code>encode</code> invocations, <code>SettingsMerge</code> resolves configuration in strict priority order:
+</p>
+<ol>
+  <li><strong>Explicit command-line flags</strong> passed to the current invocation always win.</li>
+  <li><strong>Named preset values</strong> from <code>--preset &lt;name&gt;</code> in <code>settings.json</code> apply next.</li>
+  <li><strong>User encode defaults</strong> in <code>settings.json</code> (<code>encode.*</code>) apply unless <code>--no-config</code> is passed.</li>
+  <li><strong>Built-in command defaults</strong> apply last.</li>
+</ol>
+<p>
+  Execution-scoped flags (<code>--output</code>, <code>--dry-run</code>, <code>--json</code>, <code>--preset</code>, <code>--no-config</code>) are never read from presets or defaults.
+</p>
+
+<h3>3. <code>apply</code> — Declarative Fluxfile Execution</h3>
+
+{{ terminalFrame({
+  title: "bash — apply workflow examples",
+  stream: "stdout",
+  exitCode: 0,
+  code: "# Validate syntax, schema, variable references, and DAG cycles offline (no FFmpeg required)
+flux apply --check
+
+# Probe existing inputs and print planned FFmpeg commands in dependency order
+flux apply --dry-run
+
+# Execute all jobs or a specific target subgraph with variables
+flux apply --job web --var EDITION=directors-cut"
+}) }}
+
+<h3>4. <code>info</code> — Media Inspection & Multi-Format Export</h3>
+
+{{ terminalFrame({
+  title: "bash — info inspection and report generation",
+  stream: "stdout",
+  exitCode: 0,
+  code: "# Inspect streams in terminal format (private GPS/device tags redacted by default)
+flux info --input master.mkv
+
+# Emit sanitized HTML report or SVG badge
+flux info --input master.mkv --format html --output reports/master.html
+flux info --input master.mkv --format svg --output reports/master-badge.svg"
+}) }}
+
+<h2>Stream Separation & Signal Handling</h2>
+<ul>
+  <li>
+    <strong>Clean <code>stdout</code> contract:</strong> When <code>--json</code> is specified, <code>stdout</code> receives exactly one valid UTF-8 JSON document upon completion. All warnings, notices, and live progress stay on <code>stderr</code> so pipelines such as <code>flux encode ... --json | jq .</code> never break.
+  </li>
+  <li>
+    <strong><code>NO_COLOR</code> & non-TTY detection:</strong> ANSI colour and cursor control sequences are suppressed when <code>NO_COLOR</code> is set, <code>--no-color</code> is passed, or output is redirected.
+  </li>
+  <li>
+    <strong>Graceful <code>SIGINT</code> / <code>SIGTERM</code> cancellation:</strong> Both <code>Ctrl+C</code> (<code>SIGINT</code>) and termination signals (<code>SIGTERM</code> from <code>kill</code>, systemd, or container runtimes) trigger a two-stage shutdown:
+    <ol>
+      <li>First signal: FluxEncoder writes <code>q</code> to FFmpeg's standard input, waits up to the grace period for FFmpeg to close its file trailer, removes any incomplete <code>.partial</code> file (unless <code>--keep-partial</code>), restores terminal cursor state, and exits with code <code>130</code>.</li>
+      <li>Second signal: Terminates the process immediately.</li>
+    </ol>
+  </li>
+</ul>
+
+<h2>Process Exit Code Contract</h2>
+<p>
+  Numeric exit codes in <code>FluxEncoder.Core.Results.ExitCode</code> form a stable public contract for scripts and CI runners. The table below is generated directly from <code>src/FluxEncoder.Core/Results/ExitCode.cs</code>:
+</p>
+
+<div class="flux-table-wrap" data-component="spec-table">
+  <div class="flux-table-wrap__header">
+    <span class="flux-glyph" aria-hidden="true">■</span>
+    <span>PUBLIC EXIT CODE CONTRACT (GENERATED FROM ExitCode.cs)</span>
+  </div>
+  <div class="flux-table-scroll">
+    <table class="flux-table">
+      <thead>
+        <tr>
+          <th scope="col">Code</th>
+          <th scope="col">Identifier</th>
+          <th scope="col">Contract Meaning</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in generated.exitCodes %}
+          <tr>
+            <td><code>{{ item.code }}</code></td>
+            <td><code>ExitCode.{{ item.name }}</code></td>
+            <td>{{ item.description }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>

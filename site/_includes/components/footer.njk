@@ -1,0 +1,75 @@
+{#
+  Component: docPager & siteFooter
+  Purpose:
+    1. `docPager(params)`: Automatic previous/next page links derived from `site.sidebar`.
+    2. `siteFooter(params)`: Technical footer with FFmpeg attribution, runtime specs, and repository links.
+#}
+{% macro docPager(params = {}) %}
+  {% set groups = params.groups or [] %}
+  {% set currentUrl = params.currentUrl or '/' %}
+
+  {# Flatten sidebar items in order #}
+  {% set flatItems = [] %}
+  {% for section in groups %}
+    {% for item in section.items %}
+      {% set _ = flatItems.push(item) %}
+    {% endfor %}
+  {% endfor %}
+
+  {% set currentIndex = -1 %}
+  {% for item in flatItems %}
+    {% if item.url == currentUrl %}
+      {% set currentIndex = loop.index0 %}
+    {% endif %}
+  {% endfor %}
+
+  {% if currentIndex != -1 %}
+    {% set prevItem = flatItems[currentIndex - 1] if currentIndex > 0 else null %}
+    {% set nextItem = flatItems[currentIndex + 1] if currentIndex < (flatItems.length - 1) else null %}
+
+    <nav class="flux-pager" data-component="doc-pager" data-pagefind-ignore="all" aria-label="Adjacent documentation pages">
+      {% if prevItem %}
+        <a href="{{ prevItem.url }}" class="flux-pager__link flux-pager__link--prev">
+          <span class="flux-pager__dir">◀ PREVIOUS</span>
+          <strong class="flux-pager__title">{{ prevItem.title }}</strong>
+        </a>
+      {% else %}
+        <div class="flux-pager__spacer"></div>
+      {% endif %}
+
+      {% if nextItem %}
+        <a href="{{ nextItem.url }}" class="flux-pager__link flux-pager__link--next">
+          <span class="flux-pager__dir">NEXT ▶</span>
+          <strong class="flux-pager__title">{{ nextItem.title }}</strong>
+        </a>
+      {% endif %}
+    </nav>
+  {% endif %}
+{% endmacro %}
+
+{% macro siteFooter(params = {}) %}
+  {% set siteData = params.site %}
+  {% set genData = params.generated %}
+
+  <footer class="flux-footer" data-component="site-footer" data-pagefind-ignore="all">
+    <div class="flux-footer__inner">
+      <div class="flux-footer__col">
+        <div class="flux-footer__brand">
+          <span class="flux-glyph" aria-hidden="true">◆</span>
+          <span>FLUXENCODER DOCUMENTATION</span>
+        </div>
+        <p class="flux-footer__note">
+          FluxEncoder is a command-line workspace, planner, and telemetry wrapper around
+          <a href="{{ siteData.ffmpegUrl }}" target="_blank" rel="noopener noreferrer">FFmpeg</a> and FFprobe.
+          FFmpeg is a trademark of Fabrice Bellard, originator of the FFmpeg project.
+        </p>
+      </div>
+
+      <div class="flux-footer__meta">
+        <span>TARGET: <code>{{ genData.project.targetFramework }}</code></span>
+        <span>SDK: <code>{{ genData.project.sdkVersion }}</code></span>
+        <span>SCHEMA: <a href="{{ siteData.schemaPath }}"><code>fluxfile-v1.schema.json</code></a></span>
+      </div>
+    </div>
+  </footer>
+{% endmacro %}

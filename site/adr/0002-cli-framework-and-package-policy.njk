@@ -1,0 +1,70 @@
+---
+layout: layouts/doc.njk
+title: "ADR 0002: CLI Framework & Package Policy"
+description: FluxEncoder parses commands with System.CommandLine 2.0, renders terminal output with Spectre.Console, and pins every package version centrally with committed lock files.
+category: ARC-04 // ADR 0002
+sourcePath: docs/adr/0002-cli-framework-and-package-policy.md
+tracker: TSKE001.3
+status: Accepted (2026-10-17)
+---
+{% from "components/callout.njk" import callout %}
+{% from "components/spec-table.njk" import specTable %}
+
+{{ callout({
+  kind: "important",
+  title: "DECISION SUMMARY",
+  body: "<p>FluxEncoder parses commands with <strong>System.CommandLine 2.0</strong>, renders terminal output with <strong>Spectre.Console</strong>, and pins every package version centrally in <code>Directory.Packages.props</code> with committed NuGet lock files.</p>"
+}) }}
+
+<h2>Context</h2>
+<p>
+  Two conflicting command-line designs existed in the initial repository snapshot:
+</p>
+<ul>
+  <li>The legacy <code>CliApp</code> prototype referenced an early <code>System.CommandLine</code> 2.0 beta package that no longer restored (<code>CODE_AUDIT.md</code> A-18).</li>
+  <li>Seven concept files in <code>FluxEncoderEngine/</code> subclassed <code>Spectre.Console.Cli</code> command types whose <code>ExecuteAsync</code> signatures no longer matched current <code>Spectre.Console.Cli</code> releases.</li>
+</ul>
+<p>
+  Because FluxEncoder targets single-binary and NativeAOT distribution, reflection-heavy command discovery is unsuitable: <code>Spectre.Console.Cli</code> discovers commands and settings via reflection over generic type arguments and attributes, generating trimming warnings and requiring manual dynamic-code preservation under NativeAOT. Conversely, <code>System.CommandLine</code> 2.0 is stable, maintained alongside the .NET SDK, and engineered to run trimmed and under NativeAOT.
+</p>
+
+<h2>Decision</h2>
+
+{{ specTable({
+  caption: "ADR 0002 ARCHITECTURAL & DEPENDENCY CLAUSES",
+  headers: ["Area", "Policy Specification"],
+  codeCols: [0],
+  rows: [
+    ["1. Parsing", "<code>System.CommandLine</code> 2.0 owns command, option, and argument parsing, help generation, and handler invocation. One root command tree is built in <code>FluxEncoder.Cli.CliApplication</code>."],
+    ["2. Rendering", "<code>Spectre.Console</code> is used exclusively for terminal rendering (tables, progress displays, markup). <code>Spectre.Console.Cli</code> is never referenced."],
+    ["3. Central Package Management", "<code>Directory.Packages.props</code> declares every package version with transitive pinning enabled. Project files (<code>.csproj</code>) declare <code>PackageReference</code> items without version attributes."],
+    ["4. Committed Lock Files", "Every project commits <code>packages.lock.json</code>. Builds with <code>ContinuousIntegrationBuild=true</code> restore in <code>--locked-mode</code> and fail immediately on dependency drift."],
+    ["5. Stable Releases Only", "Prerelease packages are prohibited. New package versions are adopted only after at least 14 days of public availability."],
+    ["6. Vulnerability Auditing", "NuGet audit runs on direct and transitive dependencies at severity <code>low</code> and above. With warnings treated as errors, any advisory fails the build."],
+    ["7. Testing Platform", "<code>xunit.v3</code> runs on <code>Microsoft.Testing.Platform</code> (configured in <code>global.json</code>). Test projects compile as self-hosting executables."]
+  ]
+}) }}
+
+<h2>Pinned Package Baseline</h2>
+<p>
+  Packages pinned at adoption in <code>Directory.Packages.props</code>:
+</p>
+
+{{ specTable({
+  caption: "ADOPTED PACKAGE PINS",
+  headers: ["Package", "Version", "Published Date"],
+  codeCols: [0, 1],
+  rows: [
+    ["System.CommandLine", "2.0.12", "2026-09-08"],
+    ["Spectre.Console", "0.57.2", "2026-07-02"],
+    ["xunit.v3", "4.0.1", "2026-09-12"],
+    ["Microsoft.Data.Sqlite", "10.0.12", "2026-09-08"],
+    ["YamlDotNet", "18.1.0", "2026-06-26"]
+  ]
+}) }}
+
+<h2>Consequences</h2>
+<ul>
+  <li><strong>Trimming &amp; NativeAOT safety:</strong> Command definitions are explicit C# code in <code>src/FluxEncoder.Cli/Commands/</code>, allowing the IL trimmer and NativeAOT compiler to analyze the entire call graph without reflection roots.</li>
+  <li><strong>Consistent invocation under Microsoft.Testing.Platform:</strong> Running <code>dotnet test</code> uses <code>dotnet test --solution fluxencoder.sln</code> or <code>./fluxb.ps1 Test</code>, with native JUnit, TRX, and CTRF report output in CI.</li>
+</ul>

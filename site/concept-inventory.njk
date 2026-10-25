@@ -1,0 +1,129 @@
+---
+layout: layouts/doc.njk
+title: Concept Source Inventory
+description: Classification of every concept and legacy source file into Authoritative, Merge Input, Superseded Patch, and Design-Only Archive roles.
+category: ARC-04 // ENGINEERING & DECISIONS
+sourcePath: docs/concept-inventory.md
+tracker: TSKE001.4
+status: Completed Audit
+---
+{% from "components/callout.njk" import callout %}
+{% from "components/spec-table.njk" import specTable %}
+
+<h2>Classification Rules</h2>
+<p>
+  Before building the production solution, all 29 concept and legacy <code>.cs</code> files were audited and moved to <code>archive/concept/</code> and <code>archive/legacy-cli/</code> (neither directory is compiled). Every file was classified so behavior could be ported into <code>src/</code> deliberately:
+</p>
+
+{{ specTable({
+  caption: "SOURCE INVENTORY CLASSIFICATION TAXONOMY",
+  headers: ["Classification", "Definition", "Integration Action"],
+  rows: [
+    ["<strong>Authoritative</strong>", "The latest revision of a concern; its behavior is the specification for that domain.", "Ported into the target project under the listed tracker task and adapted to <code>System.CommandLine</code> and ADR 0002."],
+    ["<strong>Merge input</strong>", "An older or parallel revision that retains behavior missing from the latest revision.", "Unique behavior is folded into the authoritative port; duplicate scaffolding is discarded."],
+    ["<strong>Superseded patch</strong>", "Fully replaced by a later revision with no unique behavior remaining.", "Not ported; retained only in <code>archive/</code> for historical traceability."],
+    ["<strong>Design-only archive</strong>", "A design document or concept module with no scheduled task or with a design rejected by ADRs.", "Reference material only; ported only when a dedicated tracker task is scheduled."]
+  ]
+}) }}
+
+<h2>1. Process Execution & Media Probing</h2>
+
+{{ specTable({
+  caption: "PROCESS EXECUTION & PROBING SOURCES",
+  headers: ["Source File", "Rev.", "Types / Members", "Class", "Target Layer", "Tracker"],
+  codeCols: [0, 5],
+  rows: [
+    ["fluxencoder_core_engine_v1_0.cs", "v1.0", "<code>FFmpegEngine</code>, <code>ProgressUpdate</code>", "Authoritative", "Infrastructure", "TSKE004.1–TSKE004.4"],
+    ["fluxencoder_core_engine_v1_0.cs", "v1.0", "<code>HardwareVendor</code>, <code>IHardwareStrategy</code>, <code>CpuStrategy</code>, <code>HardwareFactory</code>", "Superseded patch", "—", "—"],
+    ["fluxencoder_safety_logic.cs", "unversioned", "<code>SafeProcessRunner</code>", "Superseded patch", "—", "—"],
+    ["fluxencoder_safety_logic.cs", "unversioned", "<code>BatchExpander</code>", "Authoritative", "Core / Infrastructure", "TSKE007.6"],
+    ["FluxEncoderEngine.cs", "legacy", "<code>GetSupportedCodecs</code>, <code>GetSupportedFormats</code>, <code>GetHardwareAccelerationInfo</code>, <code>GetMediaInfo</code>, <code>Initialize</code>", "Merge input", "Infrastructure", "TSKE003.1–TSKE003.3"],
+    ["FluxEncoderEngine.cs", "legacy", "<code>Transcode</code>, <code>RunProcess</code>, <code>CommandResult</code>", "Superseded patch", "—", "—"]
+  ]
+}) }}
+
+{{ callout({
+  kind: "warning",
+  title: "AUDIT DEFECTS REPAIRED DURING PORT (A-06, A-07, A-15)",
+  body: "<p>Both concept runners read <code>stderr</code> only after process exit (risking pipe buffer deadlock on verbose FFmpeg logs), detached <code>CancelKeyPress</code> with a newly allocated lambda that never matched the registered delegate, and left the progress reader task unawaited. The production <code>FFmpegRunner</code> drains both streams concurrently and uses <code>PosixSignalRegistration</code>.</p>"
+}) }}
+
+<h2>2. Hardware Strategy & Codec Knowledge</h2>
+
+{{ specTable({
+  caption: "HARDWARE STRATEGY & CODEC KNOWLEDGE SOURCES",
+  headers: ["Source File", "Rev.", "Types / Members", "Class", "Target Layer", "Tracker"],
+  codeCols: [0, 5],
+  rows: [
+    ["fluxencoder_extended_engine.cs", "v2.0", "<code>HardwareStrategy</code>, <code>HardwareVendor</code>, <code>FilterGraphBuilder</code>, <code>AudioProfile</code>", "Authoritative", "Core", "TSKE005.1, TSKE006.1"],
+    ["FluxEncoder.H266_Update.cs", "v14.1", "<code>CpuStrategy</code> (CPU quality presets, VVC mapping), <code>MediaEncyclopediaPatch</code>", "Merge input", "Core", "TSKE006.4, TSKE006.6"],
+    ["fluxencoder_knowledge_base.cs", "v5.0", "<code>CodecDefinition</code>, <code>MediaEncyclopedia</code>", "Authoritative", "Core / Cli", "—"]
+  ]
+}) }}
+
+<h2>3. Command Surface</h2>
+
+{{ specTable({
+  caption: "COMMAND SURFACE SOURCES",
+  headers: ["Source File", "Rev.", "Types / Members", "Class", "Target Layer", "Tracker"],
+  codeCols: [0, 5],
+  rows: [
+    ["fluxencoder_command_update.cs", "v14.0", "<code>EncodeSettings</code>, <code>EncodeCommand</code>", "Authoritative", "Cli", "TSKE007.1"],
+    ["fluxencoder_cli_interface_v1_0.cs", "v1.0", "<code>EncodeSettings.Validate</code>, multiple <code>-i</code>, <code>--extra-args</code> splitter", "Merge input", "Cli / Core", "TSKE007.1, TSKE010.1"],
+    ["fluxencoder_smart_naming_engine.cs", "v14.0", "<code>OutputNameBuilder</code>", "Authoritative", "Core", "TSKE007.6"],
+    ["fluxencoder_advanced_commands.cs", "v4.0", "<code>MergeCommand</code>, <code>ThumbCommand</code>", "Authoritative", "Cli", "TSKE012.1, TSKE005.8"],
+    ["fluxencoder_advanced_engine.cs", "v4.0", "<code>ConcatService</code>, <code>TwoPassOrchestrator</code>, <code>ThumbnailBuilder</code>", "Authoritative", "Core / Infrastructure", "TSKE005.6–TSKE005.8"],
+    ["fluxencoder_presentation_zenith.cs", "v10.0", "<code>ManPageHelpProvider</code>, <code>AboutCommand</code>", "Design-only archive", "—", "TSKE008.6"],
+    ["fluxencoder_interactive_wizard.cs", "v11.0", "<code>BrowseCommand</code>", "Design-only archive", "—", "—"],
+    ["archive/legacy-cli/Program.cs", "legacy", "<code>init</code>, <code>codecs</code>, <code>formats</code>, <code>hw-accel</code>, <code>media-info</code>, <code>transcode</code>, <code>--json</code>", "Merge input", "Cli", "TSKE007.1, TSKE007.5"]
+  ]
+}) }}
+
+<h2>4. State, Persistence, Network & Manifests</h2>
+
+{{ specTable({
+  caption: "STATE, PERSISTENCE & MANIFEST SOURCES",
+  headers: ["Source File", "Rev.", "Types / Members", "Class", "Target Layer", "Tracker"],
+  codeCols: [0, 5],
+  rows: [
+    ["fluxencoder_unified_database.cs", "v8.0", "<code>FluxDatabase</code>, <code>FluxRunRecord</code>, <code>TelemetryDatapoint</code>", "Authoritative", "Infrastructure", "TSKE009.2–TSKE009.7"],
+    ["fluxencoder_state_management.cs", "v5.0", "<code>PresetManager</code>, <code>EncodingPreset</code> (<code>HistoryTracker</code> superseded)", "Merge input", "Core / Infrastructure", "TSKE009.6"],
+    ["fluxencoder_config_manager.cs", "v6.0", "<code>FluxConfig</code>, <code>ConfigManager</code>", "Authoritative", "Infrastructure", "TSKE009.1, TSKE009.6"],
+    ["fluxencoder_refactored_telemetry.cs", "v8.0", "<code>ProcessMonitor</code>", "Authoritative", "Infrastructure", "TSKE009.5, TSKE009.8"],
+    ["fluxencoder_remote_vault.cs", "v9.0", "<code>RemoteMount</code>, <code>VaultManager</code> (plaintext SQLite password storage rejected)", "Authoritative (flow)", "Infrastructure", "TSKE010.3"],
+    ["fluxencoder_uri_translator.cs", "v9.0", "<code>ResolvedUri</code>, <code>UriTranslator</code>", "Authoritative", "Core", "TSKE010.4"],
+    ["fluxencoder_declarative_engine.cs", "v12.0", "<code>FluxfileManifest</code>, <code>FluxJob</code>, <code>VideoSpec</code>, <code>AudioSpec</code>", "Design-only archive", "—", "TSKE011.1"]
+  ]
+}) }}
+
+<h2>5. Quality Assurance, Exporters & Terminal Rendering</h2>
+
+{{ specTable({
+  caption: "QA, EXPORTERS & TERMINAL RENDERING SOURCES",
+  headers: ["Source File", "Rev.", "Types / Members", "Class", "Target Layer", "Tracker"],
+  codeCols: [0, 5],
+  rows: [
+    ["fluxencoder_qa_engine.cs", "v13.0", "<code>AuditEvent</code>, <code>AuditReport</code>, <code>AuditEngine</code>", "Authoritative", "Core / Infrastructure", "TSKE012.5, TSKE012.6"],
+    ["fluxencoder_audit_ui.cs", "v13.0", "<code>AuditCommand</code>", "Authoritative", "Cli", "TSKE012.5"],
+    ["fluxencoder_multi_format_exporters.cs", "v6.0", "<code>MetadataExporter</code>, <code>SvgBadgeGenerator</code>", "Authoritative", "Core", "TSKE011.5"],
+    ["fluxencoder_analytics_ui.cs", "v7.0", "<code>CompareCommand</code>, <code>TuiTimeSeriesChart</code>", "Authoritative", "Cli", "TSKE009.8"],
+    ["fluxencoder_foundation_gradients_padding.cs", "v5.0", "<code>TuiPalette</code>, <code>TuiBorders</code>, <code>TuiPadder</code>", "Authoritative", "Cli", "TSKE008.2, TSKE008.3"],
+    ["fluxencoder_nextgen_ui_gauges.cs", "v3.0", "<code>TuiGauge</code>, <code>OperationsDashboard</code>", "Authoritative", "Cli", "TSKE008.4"],
+    ["fluxencoder_streaming_ui.cs", "v5.0", "<code>StreamingDashboard</code>", "Authoritative", "Cli", "TSKE008.4, TSKE012.4"],
+    ["fluxencoder_visual_logic.cs", "unversioned", "<code>AsciiSparkline</code>, <code>PostActionReport</code>", "Authoritative", "Cli", "TSKE008.4"],
+    ["fluxencoder_ui_implementation.cs", "unversioned", "<code>DashboardRenderer</code>, <code>ProgressBar</code>", "Superseded patch", "—", "—"]
+  ]
+}) }}
+
+<h2>Inventory Summary</h2>
+
+{{ specTable({
+  caption: "CONCEPT INVENTORY TOTALS",
+  headers: ["Classification", "File Count (Whole or Partial)", "Notes"],
+  rows: [
+    ["<strong>Authoritative</strong>", "21", "Core behavioral specifications ported into <code>FluxEncoder.Core</code>, <code>Infrastructure</code>, and <code>Cli</code>."],
+    ["<strong>Merge input</strong>", "5", "<code>FluxEncoder.H266_Update.cs</code>, <code>fluxencoder_cli_interface_v1_0.cs</code>, <code>fluxencoder_state_management.cs</code>, <code>FluxEncoderEngine.cs</code>, legacy <code>Program.cs</code>."],
+    ["<strong>Superseded patch</strong>", "5", "<code>fluxencoder_ui_implementation.cs</code> (whole) and superseded sections of four earlier files."],
+    ["<strong>Design-only archive</strong>", "3", "<code>fluxencoder_presentation_zenith.cs</code>, <code>fluxencoder_interactive_wizard.cs</code>, <code>fluxencoder_declarative_engine.cs</code>."]
+  ]
+}) }}

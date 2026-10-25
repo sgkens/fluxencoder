@@ -1,0 +1,104 @@
+{
+  "title": "FluxEncoder",
+  "subtitle": "Deterministic CLI Workspace & Telemetry Layer for FFmpeg",
+  "version": "0.1.0-alpha",
+  "status": "Integration Baseline",
+  "language": "en",
+  "repoUrl": "https://gitlab.com/sgkens/fluxencoder",
+  "ffmpegUrl": "https://ffmpeg.org",
+  "schemaPath": "/schema/fluxfile-v1.schema.json",
+  "topNav": [
+    { "label": "Overview", "url": "/" },
+    { "label": "Getting Started", "url": "/getting-started/" },
+    { "label": "CLI Reference", "url": "/cli-reference/" },
+    { "label": "Fluxfile", "url": "/fluxfile/" },
+    { "label": "Security", "url": "/security/" },
+    { "label": "ADRs", "url": "/adr/" }
+  ],
+  "sidebar": [
+    {
+      "group": "FOUNDATION",
+      "code": "SYS-01",
+      "items": [
+        {
+          "title": "Overview & Signal Architecture",
+          "url": "/",
+          "badge": "CORE",
+          "source": "README.md"
+        },
+        {
+          "title": "Getting Started & Build",
+          "url": "/getting-started/",
+          "badge": "NET10",
+          "source": "README.md"
+        }
+      ]
+    },
+    {
+      "group": "INTERFACES & WORKFLOWS",
+      "code": "CLI-02",
+      "items": [
+        {
+          "title": "CLI Command & Exit Codes",
+          "url": "/cli-reference/",
+          "badge": "CONTRACT",
+          "source": "src/FluxEncoder.Cli/CliApplication.cs"
+        },
+        {
+          "title": "Fluxfile Manifest & Schema",
+          "url": "/fluxfile/",
+          "badge": "V1",
+          "source": "docs/fluxfile.md"
+        }
+      ]
+    },
+    {
+      "group": "OPERATIONS & TRUST",
+      "code": "OPS-03",
+      "items": [
+        {
+          "title": "Data, History & Telemetry",
+          "url": "/data-and-telemetry/",
+          "badge": "SQLITE",
+          "source": "docs/data-and-telemetry.md"
+        },
+        {
+          "title": "Security Model & Boundaries",
+          "url": "/security/",
+          "badge": "POLICY",
+          "source": "docs/security.md"
+        }
+      ]
+    },
+    {
+      "group": "ENGINEERING & DECISIONS",
+      "code": "ARC-04",
+      "items": [
+        {
+          "title": "Concept Source Inventory",
+          "url": "/concept-inventory/",
+          "badge": "AUDIT",
+          "source": "docs/concept-inventory.md"
+        },
+        {
+          "title": "Architecture Decision Records",
+          "url": "/adr/",
+          "badge": "INDEX",
+          "source": "docs/adr/"
+        },
+        {
+          "title": "ADR 0001: Target Framework",
+          "url": "/adr/0001-target-framework-policy/",
+          "badge": "ACCEPTED",
+          "source": "docs/adr/0001-target-framework-policy.md"
+        },
+        {
+          "title": "ADR 0002: CLI & Packages",
+          "url": "/adr/0002-cli-framework-and-package-policy/",
+          "badge": "ACCEPTED",
+          "source": "docs/adr/0002-cli-framework-and-package-policy.md"
+        }
+      ]
+    }
+  ]
+}

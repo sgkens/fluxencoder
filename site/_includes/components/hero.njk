@@ -1,0 +1,77 @@
+{#
+  Component: signalHero
+  Purpose: Technical overview hero honoring FFmpeg as the foundational engine and presenting
+           FluxEncoder's deterministic planning, safety, and telemetry layer.
+  Parameters:
+    - eyebrow: Monospace category/version code
+    - title: Primary technical heading
+    - subtitle: Secondary accent heading
+    - lead: Concise technical description
+    - primaryAction: `{ label, url }`
+    - secondaryAction: `{ label, url }`
+    - stats: Array of `{ label, value, detail }`
+#}
+{% macro signalHero(params = {}) %}
+  <section class="flux-hero" data-component="signal-hero">
+    <div class="flux-hero__grid">
+      <div class="flux-hero__content">
+        {% if params.eyebrow %}
+          <div class="flux-hero__eyebrow">
+            <span class="flux-glyph" aria-hidden="true">◆</span>
+            <span>{{ params.eyebrow }}</span>
+          </div>
+        {% endif %}
+
+        <h1 class="flux-hero__title">
+          {{ params.title }}
+          {% if params.subtitle %}
+            <span class="flux-hero__subtitle">{{ params.subtitle }}</span>
+          {% endif %}
+        </h1>
+
+        {% if params.lead %}
+          <p class="flux-hero__lead">{{ params.lead }}</p>
+        {% endif %}
+
+        <div class="flux-hero__ffmpeg-banner" role="note" aria-label="FFmpeg Foundation">
+          <div class="flux-hero__ffmpeg-badge">FFMPEG FOUNDATION</div>
+          <p class="flux-hero__ffmpeg-text">
+            FFmpeg performs the underlying demuxing, decoding, filtering, encoding, and muxing.
+            FluxEncoder wraps FFmpeg with argument-list isolation (no shell invocation), FFprobe
+            pre-flight inspection, hardware test-encode verification, atomic output staging, and
+            bounded SQLite WAL telemetry.
+          </p>
+        </div>
+
+        {% if params.primaryAction or params.secondaryAction %}
+          <div class="flux-hero__actions" data-pagefind-ignore="all">
+            {% if params.primaryAction %}
+              <a href="{{ params.primaryAction.url }}" class="flux-btn flux-btn--primary">
+                <span class="flux-glyph" aria-hidden="true">▶</span>
+                <span>{{ params.primaryAction.label }}</span>
+              </a>
+            {% endif %}
+            {% if params.secondaryAction %}
+              <a href="{{ params.secondaryAction.url }}" class="flux-btn flux-btn--secondary">
+                <span class="flux-glyph" aria-hidden="true">■</span>
+                <span>{{ params.secondaryAction.label }}</span>
+              </a>
+            {% endif %}
+          </div>
+        {% endif %}
+      </div>
+
+      {% if params.stats %}
+        <div class="flux-hero__metrics" aria-label="Engineering invariants">
+          {% for stat in params.stats %}
+            <div class="flux-metric-card">
+              <span class="flux-metric-card__label">{{ stat.label }}</span>
+              <strong class="flux-metric-card__value">{{ stat.value }}</strong>
+              <span class="flux-metric-card__detail">{{ stat.detail }}</span>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+  </section>
+{% endmacro %}

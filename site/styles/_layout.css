@@ -1,0 +1,91 @@
+/* 3-Column Documentation App Shell */
+.flux-shell {
+  width: 100%;
+  max-width: var(--flux-shell-max);
+  margin: 0 auto;
+  flex: 1 0 auto;
+  display: grid;
+  grid-template-columns: var(--flux-sidebar-w) minmax(0, 1fr) var(--flux-toc-w);
+  align-items: start;
+}
+
+.flux-main {
+  min-width: 0;
+  padding: 2rem 2.5rem 3.5rem;
+  border-left: 1px solid var(--flux-border-subtle);
+  border-right: 1px solid var(--flux-border-subtle);
+  min-height: calc(100dvh - var(--flux-header-h));
+}
+
+.flux-article {
+  min-width: 0;
+}
+
+.flux-page-header {
+  margin-bottom: 2rem;
+  padding-bottom: 1.35rem;
+  border-bottom: 1px solid var(--flux-border-subtle);
+}
+
+.flux-page-header__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  font-family: var(--flux-font-mono);
+  font-size: var(--flux-text-xs);
+}
+
+.flux-page-header__category {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--flux-accent-primary);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.flux-page-header__title {
+  margin: 0 0 0.65rem;
+  font-size: var(--flux-text-2xl);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.flux-page-header__lead {
+  margin: 0;
+  font-size: var(--flux-text-lg);
+  color: var(--flux-text-secondary);
+  max-width: 68ch;
+}
+
+/* Tablet Breakpoint: Collapse Right TOC Rail */
+@media (max-width: 1200px) {
+  .flux-shell {
+    grid-template-columns: var(--flux-sidebar-w) minmax(0, 1fr);
+  }
+
+  .flux-toc {
+    display: none;
+  }
+
+  .flux-main {
+    border-right: 0;
+    padding: 1.75rem 2rem 3rem;
+  }
+}
+
+/* Mobile Breakpoint: Off-Canvas Sidebar Drawer */
+@media (max-width: 900px) {
+  .flux-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .flux-main {
+    border-left: 0;
+    padding: 1.35rem 1.1rem 2.5rem;
+  }
+}

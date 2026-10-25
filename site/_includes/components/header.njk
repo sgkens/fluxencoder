@@ -1,0 +1,101 @@
+{#
+  Component: siteHeader
+  Purpose: Top command bar with FluxEncoder signal badge, version status, primary navigation,
+           Pagefind search modal trigger, theme switcher, and mobile navigation drawer toggle.
+  Parameters:
+    - site: Global site metadata object
+    - generated: Generated repository metadata object
+    - currentUrl: Current page URL (from `page.url`)
+#}
+{% macro siteHeader(params = {}) %}
+  {% set siteData = params.site %}
+  {% set genData = params.generated %}
+  {% set currentUrl = params.currentUrl or '/' %}
+
+  <header class="flux-header" data-component="site-header" data-pagefind-ignore="all">
+    <div class="flux-header__inner">
+      <div class="flux-header__brand-cluster">
+        <button
+          type="button"
+          class="flux-icon-btn flux-header__menu-btn"
+          data-drawer-toggle
+          aria-expanded="false"
+          aria-controls="flux-sidebar-drawer"
+          aria-label="Toggle documentation navigation"
+        >
+          <span class="flux-glyph" aria-hidden="true">■</span>
+          <span class="flux-sr-only">Menu</span>
+        </button>
+
+        <a href="/" class="flux-brand" aria-label="{{ siteData.title }} documentation home">
+          <span class="flux-brand__glyph" aria-hidden="true">◆</span>
+          <span class="flux-brand__name">FLUX<span class="flux-brand__accent">ENCODER</span></span>
+        </a>
+
+        <div class="flux-header__telemetry-pills" aria-label="Target runtime metadata">
+          <span class="flux-pill flux-pill--signal" title="Target framework policy (ADR 0001)">
+            {{ genData.project.targetFramework }}
+          </span>
+          <span class="flux-pill flux-pill--ffmpeg" title="Foundational media processing engine">
+            FFMPEG ENGINE
+          </span>
+        </div>
+      </div>
+
+      <nav class="flux-header__nav" aria-label="Primary documentation sections">
+        <ul class="flux-header__nav-list">
+          {% for item in siteData.topNav %}
+            {% set isActive = (currentUrl == item.url) or (item.url != '/' and currentUrl.startsWith(item.url)) %}
+            <li class="flux-header__nav-item">
+              <a
+                href="{{ item.url }}"
+                class="flux-header__nav-link{% if isActive %} is-active{% endif %}"
+                {% if isActive %}aria-current="page"{% endif %}
+              >
+                {{ item.label }}
+              </a>
+            </li>
+          {% endfor %}
+        </ul>
+      </nav>
+
+      <div class="flux-header__actions">
+        <button
+          type="button"
+          class="flux-search-trigger"
+          data-search-open
+          aria-label="Search documentation (Ctrl+K or /)"
+          aria-haspopup="dialog"
+          aria-controls="flux-search-dialog"
+        >
+          <span class="flux-search-trigger__glyph" aria-hidden="true">▶</span>
+          <span class="flux-search-trigger__label">Search docs...</span>
+          <kbd class="flux-kbd" aria-hidden="true">Ctrl K</kbd>
+        </button>
+
+        <button
+          type="button"
+          class="flux-icon-btn flux-theme-toggle"
+          data-theme-toggle
+          aria-label="Switch color theme"
+          title="Toggle dark or light signal theme"
+        >
+          <span class="flux-theme-toggle__dark" aria-hidden="true">◆</span>
+          <span class="flux-theme-toggle__light" aria-hidden="true">◇</span>
+          <span class="flux-theme-toggle__text" data-theme-label>DARK</span>
+        </button>
+
+        <a
+          href="{{ siteData.repoUrl }}"
+          class="flux-header__repo-link"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="GitLab Repository"
+        >
+          <span>GITLAB</span>
+          <span class="flux-glyph" aria-hidden="true">↗</span>
+        </a>
+      </div>
+    </div>
+  </header>
+{% endmacro %}

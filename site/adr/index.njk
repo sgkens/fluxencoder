@@ -1,0 +1,84 @@
+---
+layout: layouts/doc.njk
+title: Architecture Decision Records
+description: Authoritative architectural decisions governing FluxEncoder's runtime target, CLI parsing framework, package pinning, and NativeAOT readiness.
+category: ARC-04 // ENGINEERING & DECISIONS
+sourcePath: docs/adr/
+tracker: ARC-E001
+status: Accepted
+---
+{% from "components/card-grid.njk" import cardGrid %}
+{% from "components/spec-table.njk" import specTable %}
+
+<h2>Decision Log</h2>
+<p>
+  Architecture Decision Records (ADRs) capture foundational technical choices in <code>docs/adr/</code> along with their context, trade-offs, and conditions for future re-evaluation:
+</p>
+
+{{ cardGrid({
+  columns: 2,
+  items: [
+    {
+      code: "ADR 0001",
+      badge: "ACCEPTED // 2026-10-17",
+      title: "Target Framework Policy",
+      body: "FluxEncoder targets .NET 10 (<code>net10.0</code>) exclusively and pins the 10.0 SDK feature band in <code>global.json</code>. Multi-targeting <code>net8.0</code> is rejected unless a concrete consumer requirement is recorded.",
+      url: "/adr/0001-target-framework-policy/",
+      meta: "docs/adr/0001-target-framework-policy.md (TSKE001.1)"
+    },
+    {
+      code: "ADR 0002",
+      badge: "ACCEPTED // 2026-10-17",
+      title: "CLI Framework & Package Policy",
+      body: "Commands are parsed with <code>System.CommandLine 2.0</code> for trimming/NativeAOT compatibility, rendered with <code>Spectre.Console</code>, and centrally pinned in <code>Directory.Packages.props</code> with committed lock files.",
+      url: "/adr/0002-cli-framework-and-package-policy/",
+      meta: "docs/adr/0002-cli-framework-and-package-policy.md (TSKE001.3)"
+    }
+  ]
+}) }}
+
+<h2>Centrally Pinned Dependency Matrix</h2>
+<p>
+  Per <a href="/adr/0002-cli-framework-and-package-policy/">ADR 0002</a>, every direct NuGet dependency is pinned in <code>Directory.Packages.props</code> with <code>CentralPackageTransitivePinningEnabled=true</code> and verified via locked restore (<code>packages.lock.json</code>). The table below is generated directly from <code>Directory.Packages.props</code>:
+</p>
+
+<div class="flux-table-wrap" data-component="spec-table">
+  <div class="flux-table-wrap__header">
+    <span class="flux-glyph" aria-hidden="true">■</span>
+    <span>CENTRALLY PINNED PACKAGES (GENERATED FROM Directory.Packages.props)</span>
+  </div>
+  <div class="flux-table-scroll">
+    <table class="flux-table">
+      <thead>
+        <tr>
+          <th scope="col">Package Identifier</th>
+          <th scope="col">Pinned Version</th>
+          <th scope="col">Architectural Role</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for pkg in generated.packages %}
+          <tr>
+            <td><code>{{ pkg.name }}</code></td>
+            <td><code>{{ pkg.version }}</code></td>
+            <td>
+              {% if pkg.name == 'System.CommandLine' %}
+                Command, option, and argument parsing in <code>FluxEncoder.Cli</code> (trimming &amp; NativeAOT safe).
+              {% elseif pkg.name == 'Spectre.Console' %}
+                Terminal rendering (tables, progress bars, markup) in <code>FluxEncoder.Cli</code>.
+              {% elseif pkg.name == 'Microsoft.Data.Sqlite' %}
+                Local WAL execution history and telemetry storage in <code>FluxEncoder.Infrastructure</code>.
+              {% elseif pkg.name == 'YamlDotNet' %}
+                Low-level event-stream parser and emitter for <code>Fluxfile.yaml</code> and YAML exports.
+              {% elseif pkg.name == 'xunit.v3' %}
+                Self-hosting test executables running on <code>Microsoft.Testing.Platform</code>.
+              {% else %}
+                Pinned project dependency.
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>

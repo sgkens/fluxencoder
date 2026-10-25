@@ -1,0 +1,127 @@
+{#
+  Component: schemaViewer
+  Purpose: Interactive, client-filterable JSON Schema explorer for `fluxfile-v1.schema.json`,
+           rendered at build time from `generated.fluxfileSchema`.
+  Parameters:
+    - schema: `generated.fluxfileSchema` object
+#}
+{% macro schemaViewer(params = {}) %}
+  {% set schema = params.schema %}
+
+  <section class="flux-schema-viewer" data-component="schema-viewer" aria-label="Fluxfile v1 JSON Schema Explorer">
+    <div class="flux-schema-viewer__header">
+      <div class="flux-schema-viewer__title-group">
+        <span class="flux-glyph" aria-hidden="true">◆</span>
+        <strong class="flux-schema-viewer__title">{{ schema.title }} — SCHEMA EXPLORER</strong>
+        <span class="flux-pill flux-pill--signal">Draft 2020-12</span>
+      </div>
+      <div class="flux-schema-viewer__controls" data-pagefind-ignore="all">
+        <label for="flux-schema-filter" class="flux-sr-only">Filter schema keys</label>
+        <input
+          id="flux-schema-filter"
+          type="search"
+          class="flux-schema-viewer__input"
+          placeholder="Filter job options (e.g. codec, hardware, audio)..."
+          data-schema-filter
+          autocomplete="off"
+        />
+        <a href="/schema/fluxfile-v1.schema.json" class="flux-btn flux-btn--compact" target="_blank" rel="noopener">
+          <span>RAW JSON SCHEMA</span>
+          <span aria-hidden="true">↗</span>
+        </a>
+      </div>
+    </div>
+
+    <div class="flux-schema-viewer__section">
+      <h4 class="flux-schema-viewer__subhead">TOP-LEVEL MANIFEST KEYS</h4>
+      <div class="flux-table-scroll">
+        <table class="flux-table">
+          <thead>
+            <tr>
+              <th scope="col">Key</th>
+              <th scope="col">Required</th>
+              <th scope="col">Type</th>
+              <th scope="col">Specification</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in schema.topLevel %}
+              <tr>
+                <td><code>{{ item.key }}</code></td>
+                <td>
+                  {% if item.required %}
+                    <span class="flux-badge flux-badge--req">REQUIRED</span>
+                  {% else %}
+                    <span class="flux-badge">OPTIONAL</span>
+                  {% endif %}
+                </td>
+                <td><code>{{ item.type }}</code></td>
+                <td>{{ item.description }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="flux-schema-viewer__section">
+      <h4 class="flux-schema-viewer__subhead">JOB DEFINITION KEYS (<code>jobs.&lt;name&gt;</code>)</h4>
+      <div class="flux-table-scroll">
+        <table class="flux-table">
+          <thead>
+            <tr>
+              <th scope="col">Key</th>
+              <th scope="col">Required</th>
+              <th scope="col">Type</th>
+              <th scope="col">Specification</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in schema.jobProps %}
+              <tr>
+                <td><code>{{ item.key }}</code></td>
+                <td>
+                  {% if item.required %}
+                    <span class="flux-badge flux-badge--req">REQUIRED</span>
+                  {% else %}
+                    <span class="flux-badge">OPTIONAL</span>
+                  {% endif %}
+                </td>
+                <td><code>{{ item.type }}</code></td>
+                <td>{{ item.description }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="flux-schema-viewer__section">
+      <h4 class="flux-schema-viewer__subhead">
+        ENCODE OPTION PROPERTIES (ALLOWED IN <code>defaults</code> AND <code>jobs.&lt;name&gt;</code>)
+      </h4>
+      <div class="flux-table-scroll">
+        <table class="flux-table" data-schema-options-table>
+          <thead>
+            <tr>
+              <th scope="col">Fluxfile Key</th>
+              <th scope="col">CLI Equivalent</th>
+              <th scope="col">Allowed Values / Type</th>
+              <th scope="col">Specification</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for opt in schema.optionProps %}
+              <tr data-schema-row="{{ opt.key }} {{ opt.type }} {{ opt.description | lower }}">
+                <td><code>{{ opt.key }}</code></td>
+                <td><code>{{ opt.cliFlag }}</code></td>
+                <td><code>{{ opt.type }}</code></td>
+                <td>{{ opt.description }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+{% endmacro %}

@@ -1,0 +1,50 @@
+{#
+  Component: specTable
+  Purpose: High-density technical specification table with tabular numeric alignment,
+           monospace keys, and responsive horizontal scroll wrapper.
+  Parameters:
+    - caption: Optional table caption/label
+    - headers: Array of column header strings
+    - rows: Array of row arrays (where cells can contain HTML or plain text)
+    - codeCols: Optional array of 0-based column indices to wrap in `<code>`
+#}
+{% macro specTable(params = {}) %}
+  {% set headers = params.headers or [] %}
+  {% set rows = params.rows or [] %}
+  {% set codeCols = params.codeCols or [] %}
+
+  <div class="flux-table-wrap" data-component="spec-table">
+    {% if params.caption %}
+      <div class="flux-table-wrap__header">
+        <span class="flux-glyph" aria-hidden="true">■</span>
+        <span>{{ params.caption }}</span>
+      </div>
+    {% endif %}
+    <div class="flux-table-scroll">
+      <table class="flux-table">
+        <thead>
+          <tr>
+            {% for col in headers %}
+              <th scope="col">{{ col }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+            <tr>
+              {% for cell in row %}
+                <td>
+                  {% if loop.index0 in codeCols %}
+                    <code>{{ cell | safe }}</code>
+                  {% else %}
+                    {{ cell | safe }}
+                  {% endif %}
+                </td>
+              {% endfor %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endmacro %}

@@ -1,0 +1,178 @@
+---
+layout: layouts/doc.njk
+title: Fluxfile Manifest & Schema Reference
+description: Version-controlled YAML and JSON encoding job graphs validated and executed in dependency order by flux apply.
+category: CLI-02 // INTERFACES & WORKFLOWS
+sourcePath: docs/fluxfile.md
+tracker: FMT-E011
+status: Verified Contract
+---
+{% from "components/terminal.njk" import terminalFrame %}
+{% from "components/callout.njk" import callout %}
+{% from "components/spec-table.njk" import specTable %}
+{% from "components/schema-viewer.njk" import schemaViewer %}
+{% from "components/pipeline.njk" import signalPipeline %}
+
+<h2>A First Fluxfile</h2>
+<p>
+  A Fluxfile is a version-controlled list of encode jobs, written in YAML (<code>Fluxfile.yaml</code>) or JSON (<code>Fluxfile.json</code>), that <code>flux apply</code> validates as a whole before running in dependency order.
+</p>
+
+{{ terminalFrame({
+  title: "Fluxfile.yaml",
+  stream: "YAML Manifest",
+  code: "# yaml-language-server: $schema=https://gitlab.com/sgkens/fluxencoder/-/raw/main/docs/schema/fluxfile-v1.schema.json
+version: 1
+
+defaults:
+  quality: high
+  audio-codec: aac
+
+jobs:
+  master:
+    input: raw/take1.mov
+    output: out/master.mkv
+    codec: hevc
+
+  web:
+    input: \"@master\"          # consumes the output of job 'master'
+    output: out/web.mp4
+    codec: h264
+    quality: balanced
+
+  trailers:
+    input: raw/trailers/      # every media file in the directory
+    output: out/trailers/
+    preset: web               # named preset from settings.json"
+}) }}
+
+<p>Run from the directory containing <code>Fluxfile.yaml</code>:</p>
+
+{{ terminalFrame({
+  title: "bash — flux apply lifecycle",
+  stream: "stdout",
+  exitCode: 0,
+  code: "flux apply --check      # validate syntax, schema, and DAG; needs no FFmpeg, touches no file
+flux apply --dry-run    # probe and plan, show each FFmpeg command
+flux apply              # execute jobs in dependency order
+flux apply              # idempotent re-run: finished outputs are skipped"
+}) }}
+
+<h2>Interactive Schema Explorer</h2>
+<p>
+  The table below is projected directly from <a href="/schema/fluxfile-v1.schema.json"><code>docs/schema/fluxfile-v1.schema.json</code></a> (JSON Schema Draft 2020-12). A parity test in <code>FluxEncoder.Cli.Tests</code> verifies that every option accepted by <code>apply</code> matches this schema.
+</p>
+
+{{ schemaViewer({
+  schema: generated.fluxfileSchema
+}) }}
+
+<h2>Manifest Semantics</h2>
+
+<h3>Values Are Text</h3>
+<p>
+  YAML 1.1/1.2 implicit typing does not apply. Values such as <code>no</code>, <code>1:30</code>, and <code>010</code> remain the exact text written in the file, and each option parses its own value—so <code>start: 1:30</code> always means 90 seconds and never a sexagesimal integer. Quote values that begin with YAML indicator characters (<code>@</code>, <code>*</code>, <code>&amp;</code>, <code>!</code>, or <code>{</code>).
+</p>
+
+<h3>Variable Substitution (<code>${NAME}</code>)</h3>
+<p>
+  Variables are expanded in string values in a single non-recursive pass:
+</p>
+
+{{ specTable({
+  caption: "VARIABLE EXPANSION SYNTAX",
+  headers: ["Syntax", "Resolution Behavior"],
+  codeCols: [0],
+  rows: [
+    ["${NAME}", "Replaced with the value of <code>NAME</code>. Refused with exit code <code>2</code> if unset or empty."],
+    ["${NAME:-fallback}", "Replaced with the value of <code>NAME</code>, or <code>fallback</code> when unset or empty."],
+    ["$$", "Replaced with a literal <code>$</code> character."]
+  ]
+}) }}
+
+<p>
+  Values resolve from <code>--var NAME=VALUE</code> first, then from environment variables prefixed with <code>FLUX_</code>. Arbitrary environment variables (such as <code>GITHUB_TOKEN</code> or <code>AWS_SECRET_ACCESS_KEY</code>) are never read.
+</p>
+
+{{ terminalFrame({
+  title: "bash — passing variables to flux apply",
+  stream: "stdout",
+  code: "FLUX_MEDIA=/srv/media flux apply --var NAME=episode-01"
+}) }}
+
+<h3>Path Resolution & Containment</h3>
+<p>
+  Relative paths resolve against the directory containing the Fluxfile, never the current working directory. Output paths must resolve inside the Fluxfile's directory unless <code>flux apply --allow-outside</code> is explicitly supplied.
+</p>
+
+<h3>JSON Format (<code>Fluxfile.json</code>)</h3>
+<p>
+  <code>Fluxfile.json</code> uses the identical structure. Comments (<code>//</code>) and trailing commas are permitted:
+</p>
+
+{{ terminalFrame({
+  title: "Fluxfile.json",
+  stream: "JSON Manifest",
+  code: "{
+  \"$schema\": \"https://gitlab.com/sgkens/fluxencoder/-/raw/main/docs/schema/fluxfile-v1.schema.json\",
+  \"version\": 1,
+  \"jobs\": {
+    \"web\": { \"input\": \"raw/take1.mov\", \"output\": \"out/web.mp4\", \"quality\": \"balanced\" }
+  }
+}"
+}) }}
+
+<h2>Execution Flow & Failure Isolation</h2>
+
+{{ signalPipeline({
+  title: "FLUX APPLY VALIDATION & DAG EXECUTION FLOW",
+  stages: [
+    {
+      step: "STEP 01",
+      owner: "ManifestParser",
+      name: "Safe Event Parse",
+      detail: "Parse YAML or JSON. Refuse anchors, aliases, custom tags, duplicate keys, files > 1 MB, or nesting > 32 levels with line:column diagnostics (Exit 2).",
+      tag: "YamlDotNet EventReader"
+    },
+    {
+      step: "STEP 02",
+      owner: "ManifestValidator",
+      name: "Validate Graph & Options",
+      detail: "Verify keys, ${NAME} variables, path containment, @job references, dependency cycles, and option values through EncodeCommand.",
+      tag: "--check exits 0 here"
+    },
+    {
+      step: "STEP 03",
+      owner: "Topological Sort",
+      name: "Order Job Graph",
+      detail: "Schedule dependencies (needs and @job producers) first while preserving file declaration order for independent jobs.",
+      tag: "Deterministic DAG"
+    },
+    {
+      step: "STEP 04",
+      owner: "ApplyCommand",
+      name: "Idempotent Execution",
+      detail: "Skip existing outputs unless --overwrite. If a job fails, block only its downstream dependents and continue independent branches unless --fail-fast.",
+      tag: "Exit 0 / 10 / 130"
+    }
+  ]
+}) }}
+
+<h2>Untrusted Manifest Restrictions</h2>
+<p>
+  Because a Fluxfile may be cloned from an external repository, <code>flux apply</code> treats every manifest as untrusted input:
+</p>
+
+{{ specTable({
+  caption: "REFUSED CONSTRUCTS IN FLUXFILES",
+  headers: ["Disallowed Construct", "Security Rationale"],
+  codeCols: [0],
+  rows: [
+    ["ffmpeg-arg", "Raw FFmpeg arguments can read or write arbitrary local files or open network sockets. Use <code>flux encode --ffmpeg-arg</code> for interactive one-off runs."],
+    ["ffmpeg, ffprobe", "Allowing a manifest to pick the executable path would permit arbitrary program execution. Pass <code>--ffmpeg</code> on the CLI instead."],
+    ["Non-FLUX_* environment variables", "Prevents a malicious manifest from exfiltrating ambient secrets into remote URLs or output filenames."],
+    ["Outputs outside Fluxfile directory", "Prevents overwriting arbitrary files on disk unless the operator passes <code>--allow-outside</code>."],
+    ["YAML anchors, aliases, and tags", "Prevents billion-laughs memory amplification and arbitrary type instantiation."],
+    ["dry-run, json, quiet, verbose, no-color, fail-fast, no-config", "Invocation-level controls belong to the operator running <code>flux apply</code>, not the manifest."]
+  ]
+}) }}

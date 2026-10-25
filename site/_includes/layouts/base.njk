@@ -1,0 +1,99 @@
+{% from "components/header.njk" import siteHeader %}
+{% from "components/sidebar.njk" import docSidebar %}
+{% from "components/toc.njk" import pageToc %}
+{% from "components/footer.njk" import docPager, siteFooter %}
+{% from "components/search-modal.njk" import searchModal %}
+<!DOCTYPE html>
+<html lang="{{ site.language or 'en' }}" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="view-transition" content="same-origin" />
+  <title>{% if title %}{{ title }} — {{ site.title }}{% else %}{{ site.title }} — {{ site.subtitle }}{% endif %}</title>
+  <meta name="description" content="{{ description or site.subtitle }}" />
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('flux-docs-theme');
+        if (saved === 'light' || saved === 'dark') {
+          document.documentElement.setAttribute('data-theme', saved);
+        }
+      } catch (_) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="/assets/css/flux-docs.css" />
+</head>
+<body class="flux-body">
+  <a href="#main-content" class="flux-skip-link" data-pagefind-ignore="all">Skip to main technical content</a>
+
+  {{ siteHeader({
+    site: site,
+    generated: generated,
+    currentUrl: page.url
+  }) }}
+
+  <div class="flux-backdrop" data-drawer-backdrop hidden></div>
+
+  {% set processedContent = content | withHeadingIds %}
+  {% set extractedHeadings = processedContent | extractHeadings %}
+
+  <div class="flux-shell" data-component="app-shell">
+    {{ docSidebar({
+      groups: site.sidebar,
+      currentUrl: page.url
+    }) }}
+
+    <main id="main-content" class="flux-main" data-pagefind-body>
+      <article class="flux-article">
+        {% if not hidePageHeader %}
+          <header class="flux-page-header">
+            <div class="flux-page-header__meta" data-pagefind-ignore="all">
+              {% if category %}
+                <span class="flux-page-header__category">
+                  <span class="flux-glyph" aria-hidden="true">◆</span>
+                  <span>{{ category }}</span>
+                </span>
+              {% endif %}
+              {% if tracker %}
+                <span class="flux-pill">TRACKER: {{ tracker }}</span>
+              {% endif %}
+              {% if sourcePath %}
+                <span class="flux-pill">SOURCE: {{ sourcePath }}</span>
+              {% endif %}
+            </div>
+            <h1 class="flux-page-header__title" data-pagefind-meta="title">{{ title }}</h1>
+            {% if description %}
+              <p class="flux-page-header__lead">{{ description }}</p>
+            {% endif %}
+          </header>
+        {% endif %}
+
+        <div class="flux-prose">
+          {{ processedContent | safe }}
+        </div>
+
+        {{ docPager({
+          groups: site.sidebar,
+          currentUrl: page.url
+        }) }}
+      </article>
+    </main>
+
+    {{ pageToc({
+      headings: extractedHeadings,
+      sourcePath: sourcePath,
+      tracker: tracker,
+      status: status or 'Authoritative'
+    }) }}
+  </div>
+
+  {{ siteFooter({
+    site: site,
+    generated: generated
+  }) }}
+
+  {{ searchModal() }}
+
+  <script type="module" src="/assets/js/flux-docs.js"></script>
+</body>
+</html>

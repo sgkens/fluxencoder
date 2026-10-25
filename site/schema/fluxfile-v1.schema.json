@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gitlab.com/sgkens/fluxencoder/-/raw/main/docs/schema/fluxfile-v1.schema.json",
+  "title": "Fluxfile, version 1",
+  "description": "Encode jobs for 'flux apply'. Job options are the 'encode' options without their dashes. Relative paths resolve against the Fluxfile's directory; ${NAME} is replaced from --var or FLUX_* environment variables.",
+  "type": "object",
+  "required": ["version", "jobs"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "const": 1 },
+    "defaults": {
+      "description": "Encode options for every job; a job's own value wins.",
+      "$ref": "#/$defs/optionProperties",
+      "unevaluatedProperties": false
+    },
+    "jobs": {
+      "description": "Jobs by name, in file order. Names are case-insensitive.",
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+      "additionalProperties": { "$ref": "#/$defs/job" }
+    }
+  },
+  "$defs": {
+    "text": { "type": "string", "minLength": 1 },
+    "textOrList": {
+      "oneOf": [
+        { "$ref": "#/$defs/text" },
+        { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/text" } }
+      ]
+    },
+    "flag": { "type": "boolean" },
+    "job": {
+      "type": "object",
+      "required": ["input"],
+      "$ref": "#/$defs/optionProperties",
+      "unevaluatedProperties": false,
+      "properties": {
+        "input": {
+          "description": "Files, directories, URLs, remote:// paths, or \"@job\" for another job's outputs.",
+          "$ref": "#/$defs/textOrList"
+        },
+        "output": {
+          "description": "A file, or a directory ending in /. Must stay inside the Fluxfile's directory unless apply --allow-outside. Default: beside each input.",
+          "$ref": "#/$defs/text"
+        },
+        "needs": {
+          "description": "Jobs that must finish first. \"@job\" inputs add their job automatically.",
+          "$ref": "#/$defs/textOrList"
+        },
+        "preset": {
+          "description": "A preset from settings.json.",
+          "$ref": "#/$defs/text"
+        },
+        "description": { "type": "string" }
+      }
+    },
+    "optionProperties": {
+      "type": "object",
+      "properties": {
+        "format": { "description": "Container when FluxEncoder names the output: mkv, mp4, webm, mov, ts, mka, m4a, mp3, flac, opus, and others FFmpeg supports for those families.", "$ref": "#/$defs/text" },
+        "codec": { "enum": ["h264", "hevc", "av1", "vvc", "copy"] },
+        "quality": { "enum": ["fast", "balanced", "high"] },
+        "video-bitrate": { "description": "kbit/s (4000) or Mbit/s (4M).", "type": ["string", "integer"] },
+        "two-pass": { "$ref": "#/$defs/flag" },
+        "audio-codec": { "enum": ["copy", "aac", "opus", "ac3", "eac3", "flac", "mp3"] },
+        "audio-bitrate": { "description": "kbit/s (192) or with a unit (192k).", "type": ["string", "integer"] },
+        "video": { "enum": ["primary", "all", "none"] },
+        "audio": { "description": "all, default, none, or languages in preference order.", "$ref": "#/$defs/textOrList" },
+        "subs": { "description": "all, default, none, or languages.", "$ref": "#/$defs/textOrList" },
+        "no-chapters": { "$ref": "#/$defs/flag" },
+        "no-metadata": { "$ref": "#/$defs/flag" },
+        "keep-private-metadata": { "$ref": "#/$defs/flag" },
+        "no-cover": { "$ref": "#/$defs/flag" },
+        "no-attachments": { "$ref": "#/$defs/flag" },
+        "keep-data": { "$ref": "#/$defs/flag" },
+        "start": { "description": "90, 1:30, or 1h2m.", "type": ["string", "number"] },
+        "end": { "description": "90, 1:30, or 1h2m.", "type": ["string", "number"] },
+        "duration": { "description": "90, 1:30, or 1h2m.", "type": ["string", "number"] },
+        "hardware": { "enum": ["auto", "cpu", "nvidia", "amd", "intel", "apple"] },
+        "hardware-fallback": { "$ref": "#/$defs/flag" },
+        "overwrite": { "$ref": "#/$defs/flag" },
+        "skip-existing": { "$ref": "#/$defs/flag" },
+        "rename-existing": { "$ref": "#/$defs/flag" },
+        "keep-partial": { "$ref": "#/$defs/flag" },
+        "retries": { "type": ["integer", "string"] }
+      }
+    }
+  }
+}

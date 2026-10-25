@@ -1,0 +1,155 @@
+---
+layout: layouts/doc.njk
+title: Security Model & Trust Boundaries
+description: Threat mitigations, ArgumentList isolation, protocol whitelists, OS credential storage, output sanitization, and managed service controls.
+category: OPS-03 // OPERATIONS & TRUST
+sourcePath: docs/security.md
+tracker: SEC-E010
+status: Verified Policy
+---
+{% from "components/terminal.njk" import terminalFrame %}
+{% from "components/callout.njk" import callout %}
+{% from "components/spec-table.njk" import specTable %}
+{% from "components/pipeline.njk" import signalPipeline %}
+
+<h2>Trust Boundaries</h2>
+<p>
+  FluxEncoder executes FFmpeg and FFprobe on media files, directory trees, and remote URLs that may originate from untrusted sources. Its security model separates trusted operator intent from untrusted media and manifest inputs:
+</p>
+
+{{ signalPipeline({
+  title: "TRUST BOUNDARY & ISOLATION TOPOLOGY",
+  stages: [
+    {
+      step: "TRUSTED",
+      owner: "Operator & Host",
+      name: "CLI Flags, settings.json & FFmpeg Binary",
+      detail: "Direct CLI options, administrator-owned settings.json, and the local FFmpeg installation.",
+      tag: "Trusted Control Plane"
+    },
+    {
+      step: "ISOLATION",
+      owner: "FluxEncoder",
+      name: "ArgumentList & Protocol Whitelist",
+      detail: "Zero shell invocation; absolute path normalization; per-input -protocol_whitelist; secret redaction.",
+      tag: "ProcessStartInfo.ArgumentList"
+    },
+    {
+      step: "UNTRUSTED",
+      owner: "External Inputs",
+      name: "Media, Metadata, Playlists & Fluxfiles",
+      detail: "Filenames, container tags, network HLS/concat playlists, remote servers, and repository Fluxfiles.",
+      tag: "Sanitized & Constrained"
+    }
+  ]
+}) }}
+
+<ul>
+  <li><strong>No shell invocation:</strong> Every FFmpeg and FFprobe argument is passed as an individual token in <code>ProcessStartInfo.ArgumentList</code>. Shell metacharacters in filenames or metadata are never interpreted by <code>/bin/sh</code> or <code>cmd.exe</code>.</li>
+  <li><strong>Untrusted media & metadata:</strong> File and directory names, container tags, subtitle tracks, playlists, and FFmpeg stderr diagnostics are treated as untrusted data.</li>
+  <li><strong>Untrusted Fluxfiles:</strong> Because <code>Fluxfile.yaml</code> manifests are shared across repositories, <code>flux apply</code> blocks raw FFmpeg flags, custom binary paths, YAML anchors/tags, and non-<code>FLUX_*</code> environment variables.</li>
+</ul>
+
+<h2>Threats & Mitigations</h2>
+
+<h3>Hostile Filenames</h3>
+
+{{ specTable({
+  caption: "HOSTILE FILENAME MITIGATIONS",
+  headers: ["Threat Vector", "Mitigation Implemented"],
+  rows: [
+    [
+      "Relative filenames such as <code>http:x.mkv</code>, <code>concat:a|b</code>, or <code>subfile,...</code> interpreted by FFmpeg as network/virtual protocols",
+      "Local file inputs are always resolved to absolute filesystem paths before invocation (verified by integration tests confirming FFmpeg otherwise attempts to resolve host <code>x.mkv</code>)."
+    ],
+    [
+      "Filenames starting with <code>-</code> interpreted as command-line options",
+      "Inputs always follow <code>-i</code> and local inputs/outputs/temporary files are normalized to absolute paths."
+    ],
+    [
+      "ANSI escape sequences, C0/C1 control codes, or Unicode bidirectional overrides spoofing terminal output",
+      "<code>TerminalText.Safe</code> replaces control characters, C1 controls, and bidi overrides with <code>?</code> in human output; <code>Utf8JsonWriter</code> escapes them in JSON."
+    ],
+    [
+      "Output path colliding with an input or another batch item",
+      "Rejected during planning with case-aware and symlink-aware path identity checks."
+    ]
+  ]
+}) }}
+
+<h3>Hostile Metadata & Network Playlists</h3>
+<ul>
+  <li><strong>Per-input protocol whitelists:</strong> A malicious network playlist (such as HLS/M3U8 or <code>concat</code>) could reference local <code>file:</code> paths. FluxEncoder attaches an explicit <code>-protocol_whitelist</code> matched to each input's scheme:
+    <ul>
+      <li>Local file input: <code>file,crypto,data</code></li>
+      <li>HTTPS input: <code>http,https,tcp,tls,crypto,httpproxy</code></li>
+    </ul>
+  </li>
+  <li><strong>Metadata privacy stripping:</strong> Camera and phone recordings frequently embed GPS coordinates, device serial numbers, and owner names. FluxEncoder strips private location and device tags from outputs unless <code>--keep-private-metadata</code> is passed, hides them in <code>flux info</code> unless <code>--show-private</code>, and drops <code>data</code> streams (which can carry GPS telemetry tracks) unless <code>--keep-data</code>.</li>
+</ul>
+
+<h3>Remote Sources & Credential Protection</h3>
+<ul>
+  <li><code>remote://ALIAS/path</code> definitions in <code>settings.json</code> store only the scheme, host, port, username, and base path. Any URL containing an inline password in <code>settings.json</code> is refused.</li>
+  <li>Secrets are stored exclusively in the operating system's credential store (Windows Credential Manager, macOS Keychain, or Linux Secret Service via standard input) or read from <code>FLUXENCODER_SECRET_REMOTE_&lt;ALIAS&gt;</code> environment variables injected by a secret manager.</li>
+  <li>URI resolution percent-encodes the username, password, and each path segment while rejecting <code>.</code> and <code>..</code> traversal segments.</li>
+  <li><code>SecretRedactor</code> masks URL userinfo passwords, secret query parameters (<code>token</code>, <code>key</code>, <code>sig</code>, <code>signature</code>, <code>pass</code>), RTMP stream keys, <code>Authorization</code> headers, and every registered secret (both raw and percent-encoded) across terminal output, JSON reports, SQLite history, and crash diagnostics.</li>
+</ul>
+
+<h3>Output Integrity & Atomic Staging</h3>
+<ul>
+  <li>FFmpeg writes to a hidden temporary file (<code>.&lt;name&gt;.flux-&lt;id&gt;.partial</code>) in the destination directory. Only outputs that exist, are non-empty, and stay within configured size limits are atomically moved to the final path.</li>
+  <li>A job stopped by FluxEncoder (cancellation, stall timeout, or runtime limit) is never marked successful even if FFmpeg exits <code>0</code> after receiving <code>q</code>.</li>
+  <li>Incomplete <code>.partial</code> files from failed or cancelled runs are deleted automatically (or retained under their <code>.partial</code> suffix when <code>--keep-partial</code> is requested).</li>
+</ul>
+
+<h3>Sanitized Report Exports</h3>
+<p>
+  <code>flux info --format</code> encodes untrusted media metadata specifically for each target syntax:
+</p>
+
+{{ specTable({
+  caption: "REPORT EXPORT SANITIZATION MATRIX (MetadataExporter.cs)",
+  headers: ["Format", "Encoding & Containment Policy"],
+  codeCols: [0],
+  rows: [
+    ["html", "Every metadata value is HTML-entity encoded; characters forbidden by XML are stripped; an embedded Content Security Policy (<code>default-src 'none'; style-src 'unsafe-inline'</code>) blocks all scripts and external network requests."],
+    ["svg", "Rendered from a fixed geometry template without <code>&lt;script&gt;</code> tags, event attributes, external links, or external font loads; all text is XML-entity encoded."],
+    ["markdown", "Inline Markdown constructs (<code>|</code>, <code>\\</code>, <code>`</code>, <code>*</code>, <code>_</code>, <code>[</code>, <code>]</code>, <code>&lt;</code>, <code>&gt;</code>) are backslash-escaped inside table cells and line breaks are flattened."],
+    ["yaml", "Emitted via <code>YamlDotNet</code> with double-quoted scalars so untrusted values can never become booleans, numbers, anchors, or tags."],
+    ["json", "Emitted via <code>Utf8JsonWriter</code> with full control-character escaping."]
+  ]
+}) }}
+
+<h2>Raw FFmpeg Arguments & Managed Environments</h2>
+<p>
+  <code>--ffmpeg-arg</code> passes raw options directly to FFmpeg. Because raw FFmpeg flags can read or write arbitrary files or open network connections, <code>--ffmpeg-arg</code> bypasses source policies and folder containment. FluxEncoder logs an explicit warning whenever it is used.
+</p>
+<p>
+  In multi-tenant or service deployments, administrators can lock down execution by setting <code>FLUXENCODER_MANAGED=1</code> in the service environment and providing a read-only <code>settings.json</code>:
+</p>
+
+{{ terminalFrame({
+  title: "/etc/fluxencoder/config/settings.json — managed service policy",
+  stream: "JSONC Policy",
+  code: "// Owned by root/administrator, read-only for the service account
+// Run with FLUXENCODER_HOME=/etc/fluxencoder and FLUXENCODER_MANAGED=1
+{
+  \"security\": {
+    \"allowExtraArgs\": false,
+    \"allowPipes\": false,
+    \"allowDevices\": false,
+    \"allowedSchemes\": [\"https\"],
+    \"allowedRoots\": [\"/srv/media\"]
+  },
+  \"limits\": { \"maxRunMinutes\": 240, \"maxInputMB\": 20000, \"maxOutputMB\": 20000, \"threads\": 8 },
+  \"history\": { \"retentionDays\": 30, \"maxRuns\": 5000 }
+}"
+}) }}
+
+<h2>Residual Risks</h2>
+<ul>
+  <li><strong>Process argument visibility:</strong> When a password-authenticated URL is passed to FFmpeg, local OS users on the same machine may inspect process arguments unless <code>/proc</code> is mounted with <code>hidepid=2</code> (Linux). Prefer SSH key-based SFTP authentication or short-lived pre-signed URLs in shared hosts.</li>
+  <li><strong>Unstructured secret strings:</strong> Redaction masks registered credentials and known URL/header/query patterns; a secret pasted into a plain filename cannot be distinguished from ordinary text.</li>
+  <li><strong>FFmpeg codec parser vulnerabilities:</strong> Memory-safety bugs inside FFmpeg's native demuxers or decoders are outside FluxEncoder's process boundary. Keep FFmpeg patched and run service workloads inside unprivileged containers or sandboxes.</li>
+</ul>

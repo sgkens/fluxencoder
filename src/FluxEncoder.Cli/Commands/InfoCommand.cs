@@ -10,7 +10,6 @@ using FluxEncoder.Core.Security;
 using FluxEncoder.Infrastructure.Configuration;
 using FluxEncoder.Infrastructure.Manifests;
 using FluxEncoder.Infrastructure.Probing;
-using FluxEncoder.Infrastructure.Tooling;
 
 namespace FluxEncoder.Cli.Commands;
 
@@ -51,13 +50,13 @@ internal static class InfoCommand
                 return await FailAsync(host, new JobFailure(FailureCategory.InvalidUsage, "info does not read remote:// paths yet; give the file or its URL.")).ConfigureAwait(false);
             }
 
-            var tools = FFmpegLocator.Locate(new ToolPathOverrides(null, parse.GetValue(ffprobe)), ToolEnvironment.Current);
+            var (settings, _) = SettingsStore.Load(host.Paths.SettingsFile);
+            var tools = ToolSession.Locate(host, settings.Tools, null, parse.GetValue(ffprobe));
             if (tools.FFprobe is null)
             {
                 return await FailAsync(host, new JobFailure(FailureCategory.DependencyMissing, "FFprobe was not found. Install FFmpeg or pass --ffprobe.")).ConfigureAwait(false);
             }
 
-            var (settings, _) = SettingsStore.Load(host.Paths.SettingsFile);
             var probed = await MediaProber.ProbeAsync(tools.FFprobe.Path, source, token, settings.Security).ConfigureAwait(false);
             if (!probed.IsSuccess)
             {

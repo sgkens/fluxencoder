@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using FluxEncoder.Core.Security;
 using FluxEncoder.Infrastructure.Storage;
+using FluxEncoder.Infrastructure.Tooling;
 
 namespace FluxEncoder.Infrastructure.Configuration;
 
@@ -24,7 +25,7 @@ namespace FluxEncoder.Infrastructure.Configuration;
 /// </remarks>
 public static class SettingsStore
 {
-    private static readonly string[] TopLevelKeys = ["schemaVersion", "encode", "presets", "history", "security", "limits", "remotes"];
+    private static readonly string[] TopLevelKeys = ["schemaVersion", "tools", "encode", "presets", "history", "security", "limits", "remotes"];
 
     public static (FluxSettings Settings, IReadOnlyList<string> Warnings) Load(string path)
     {
@@ -79,6 +80,7 @@ public static class SettingsStore
 
             var settings = new FluxSettings
             {
+                Tools = root.TryGetProperty("tools", out var tools) ? ReadTools(tools, name, warnings) : ToolPathOverrides.None,
                 Encode = root.TryGetProperty("encode", out var encode) ? ReadOptions(encode, $"{name}: encode", warnings) : ImmutableDictionary<string, string>.Empty,
                 Presets = root.TryGetProperty("presets", out var presets) ? ReadPresets(presets, name, warnings) : FluxSettings.Default.Presets,
                 History = root.TryGetProperty("history", out var history) ? ReadHistory(history, name, warnings) : HistorySettings.Default,
@@ -141,6 +143,22 @@ public static class SettingsStore
         {
             writer.WriteStartObject();
             writer.WriteNumber("schemaVersion", FluxSettings.SchemaVersion);
+
+            if (settings.Tools != ToolPathOverrides.None)
+            {
+                writer.WriteStartObject("tools");
+                if (!string.IsNullOrWhiteSpace(settings.Tools.FFmpeg))
+                {
+                    writer.WriteString("ffmpeg", settings.Tools.FFmpeg);
+                }
+
+                if (!string.IsNullOrWhiteSpace(settings.Tools.FFprobe))
+                {
+                    writer.WriteString("ffprobe", settings.Tools.FFprobe);
+                }
+
+                writer.WriteEndObject();
+            }
 
             writer.WriteStartObject("encode");
             WriteOptions(writer, settings.Encode);
@@ -243,6 +261,39 @@ public static class SettingsStore
         {
             writer.WriteNull(name);
         }
+    }
+
+    private static ToolPathOverrides ReadTools(JsonElement element, string file, List<string> warnings)
+    {
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            warnings.Add($"{file}: tools must be an object; using defaults.");
+            return ToolPathOverrides.None;
+        }
+
+        foreach (var property in element.EnumerateObject().Where(p => p.Name is not ("ffmpeg" or "ffprobe")))
+        {
+            warnings.Add($"{file}: unknown setting 'tools.{property.Name}' ignored.");
+        }
+
+        string? PathOrNull(string key)
+        {
+            if (!element.TryGetProperty(key, out var value) || value.ValueKind == JsonValueKind.Null)
+            {
+                return null;
+            }
+
+            if (value.ValueKind == JsonValueKind.String)
+            {
+                var text = value.GetString();
+                return string.IsNullOrWhiteSpace(text) ? null : text;
+            }
+
+            warnings.Add($"{file}: tools.{key} must be a path string or null; ignored.");
+            return null;
+        }
+
+        return new ToolPathOverrides(PathOrNull("ffmpeg"), PathOrNull("ffprobe"));
     }
 
     private static SourcePolicy ReadSecurity(JsonElement element, string file, List<string> warnings)

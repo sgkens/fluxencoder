@@ -54,6 +54,27 @@ internal static class ConfigCommand
             return (int)ExitCode.Success;
         });
 
-        return new Command("config", "Show and initialise FluxEncoder's settings.") { path, show, init };
+        var tools = new Command("tools", "Show the resolved FFmpeg and FFprobe binaries and how they were found.");
+        tools.SetAction(_ =>
+        {
+            var (settings, warnings) = SettingsStore.Load(host.Paths.SettingsFile);
+            foreach (var warning in warnings)
+            {
+                host.Error.WriteLine(TerminalText.Safe(warning));
+            }
+
+            var discovery = ToolSession.Locate(host, settings.Tools, null, null);
+            var ffmpegLine = discovery.FFmpeg is { } ffmpeg
+                ? $"{ffmpeg.Path} ({ffmpeg.Source})"
+                : "not found";
+            var ffprobeLine = discovery.FFprobe is { } ffprobe
+                ? $"{ffprobe.Path} ({ffprobe.Source})"
+                : "not found";
+            host.Out.WriteLine(TerminalText.Safe($"ffmpeg   {ffmpegLine}"));
+            host.Out.WriteLine(TerminalText.Safe($"ffprobe  {ffprobeLine}"));
+            return discovery.IsComplete ? (int)ExitCode.Success : (int)ExitCode.DependencyMissing;
+        });
+
+        return new Command("config", "Show and initialise FluxEncoder's settings.") { path, show, init, tools };
     }
 }

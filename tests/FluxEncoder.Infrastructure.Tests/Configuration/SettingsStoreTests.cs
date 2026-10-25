@@ -202,4 +202,24 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.Equal(settings, SettingsStore.Load(File()).Settings);
         Assert.Contains("sftp://jane@nas.local:2222/media", System.IO.File.ReadAllText(File()), StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void Tools_ParseAndRoundTrip()
+    {
+        var (settings, warnings) = LoadText("""
+            {
+              "tools": {
+                "ffmpeg": "/opt/ffmpeg-custom/bin/ffmpeg",
+                "ffprobe": "/opt/ffmpeg-custom/bin/ffprobe"
+              }
+            }
+            """);
+
+        Assert.Empty(warnings);
+        Assert.Equal("/opt/ffmpeg-custom/bin/ffmpeg", settings.Tools.FFmpeg);
+        Assert.Equal("/opt/ffmpeg-custom/bin/ffprobe", settings.Tools.FFprobe);
+
+        SettingsStore.Save(File(), settings);
+        Assert.Equal(settings, SettingsStore.Load(File()).Settings);
+    }
 }

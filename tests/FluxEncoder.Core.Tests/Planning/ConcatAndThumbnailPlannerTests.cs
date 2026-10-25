@@ -127,6 +127,90 @@ public sealed class ConcatAndThumbnailPlannerTests
         Assert.Throws<ArgumentException>(() => new ConcatJob(["/a.mkv"], "/o.mkv", new VideoTarget.StreamCopy(), new AudioTarget.StreamCopy()));
     }
 
+    [Fact]
+    public void CompatibilityProblems_DetectsRotationHdrAndChannelLayoutDifferences()
+    {
+        var baseMedia = new MediaInfo
+        {
+            Source = "/media/a.mkv",
+            Duration = TimeSpan.FromSeconds(10),
+            Streams =
+            [
+                new VideoStream
+                {
+                    Index = 0, CodecName = "hevc", Width = 1920, Height = 1080, PixelFormat = "yuv420p10le", BitDepth = 10, Rotation = 0,
+                    Color = new ColorInfo { Primaries = "bt2020", Transfer = "smpte2084", Matrix = "bt2020nc" },
+                },
+                new AudioStream { Index = 1, CodecName = "aac", SampleRate = 48000, Channels = 6, ChannelLayout = "5.1" },
+            ],
+        };
+        var diffMedia = new MediaInfo
+        {
+            Source = "/media/b.mkv",
+            Duration = TimeSpan.FromSeconds(10),
+            Streams =
+            [
+                new VideoStream { Index = 0, CodecName = "hevc", Width = 1920, Height = 1080, PixelFormat = "yuv420p10le", BitDepth = 10, Rotation = 90 },
+                new AudioStream { Index = 1, CodecName = "aac", SampleRate = 48000, Channels = 6, ChannelLayout = "5.1(side)" },
+            ],
+        };
+
+        var problems = ConcatPlanner.CompatibilityProblems(
+        [
+            new PlanningInput(InputSource.Classify("/media/a.mkv"), baseMedia),
+            new PlanningInput(InputSource.Classify("/media/b.mkv"), diffMedia),
+        ]);
+
+        Assert.Contains("b.mkv has rotation 90 instead of 0", problems);
+        Assert.Contains("b.mkv has HDR format None instead of Hdr10", problems);
+        Assert.Contains("b.mkv has channel layout 5.1(side) instead of 5.1", problems);
+    }
+
+    [Fact]
+    public void ExtraStreams_EmitConcatExtraStreamsDroppedWarning()
+    {
+        var multiTrack = new MediaInfo
+        {
+            Source = "/media/b.mkv",
+            Duration = TimeSpan.FromSeconds(30),
+            SizeBytes = 5_000_000,
+            Streams =
+            [
+                new VideoStream { Index = 0, CodecName = "h264", Width = 1280, Height = 720, PixelFormat = "yuv420p", BitDepth = 8, AverageFrameRate = new Rational(25, 1), SampleAspectRatio = new Rational(1, 1) },
+                new AudioStream { Index = 1, CodecName = "aac", SampleRate = 48000, Channels = 2 },
+                new SubtitleStream { Index = 2, CodecName = "subrip" },
+            ],
+        };
+
+        var planned = ConcatPlanner.Plan(
+            Concat(),
+            [Clip("/media/a.mkv"), new PlanningInput(InputSource.Classify("/media/b.mkv"), multiTrack)],
+            Context()).Value!;
+
+        Assert.Equal(WarningCodes.ConcatExtraStreamsDropped, Assert.Single(planned.Warnings).Code);
+    }
+
+    [Fact]
+    public void PrivateMetadata_IsStrippedAcrossConcatenatedInputs()
+    {
+        var taggedMedia = Clip("/media/b.mkv").Media with
+        {
+            Tags = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["com.apple.quicktime.location.ISO6709"] = "+35.6895+139.6917/",
+                ["title"] = "Holiday",
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase),
+        };
+
+        var planned = ConcatPlanner.Plan(
+            Concat(),
+            [Clip("/media/a.mkv"), new PlanningInput(InputSource.Classify("/media/b.mkv"), taggedMedia)],
+            Context()).Value!;
+
+        Assert.Equal(WarningCodes.PrivateMetadataRemoved, Assert.Single(planned.Warnings).Code);
+        Assert.Contains("com.apple.quicktime.location.ISO6709=", planned.Plan!.Invocations.Single().Arguments);
+    }
+
     private static ThumbnailJob Sheet(string output = "/media/out/sheet.jpg", int columns = 4, int rows = 3, int tileWidth = 320) =>
         new() { InputPath = "/media/movie.mkv", OutputPath = output, Columns = columns, Rows = rows, TileWidth = tileWidth };
 

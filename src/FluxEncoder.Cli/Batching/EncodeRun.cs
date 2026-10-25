@@ -46,7 +46,7 @@ internal sealed class EncodeRun
         bool dryRun,
         CancellationToken cancellationToken)
     {
-        var tools = await ToolSession.CreateAsync(ffmpeg, ffprobe, cancellationToken).ConfigureAwait(false);
+        var tools = await ToolSession.CreateAsync(ffmpeg, ffprobe, cancellationToken, session.Settings.Tools, host).ConfigureAwait(false);
         if (!tools.IsSuccess)
         {
             return tools.Failure;
@@ -176,5 +176,50 @@ internal sealed class EncodeRun
             : JobResult.Succeeded(plan.OutputPath, [.. warnings, .. plan.Warnings]);
 
         return new JobReport(input, job, result, plan, strategy);
+    }
+
+    public async Task<JobReport> RunConcatAsync(string label, ConcatJob job, CancellationToken cancellationToken)
+    {
+        var started = DateTimeOffset.UtcNow;
+        var telemetry = _history is { RecordsTelemetry: true } ? new TelemetryRecorder() : null;
+        var report = DryRun
+            ? await PlanConcatAsync(label, job, cancellationToken).ConfigureAwait(false)
+            : await _reporter.RunJobAsync(0, 1, label, progress => ConcatAsync(label, job, Tee(progress, telemetry), cancellationToken)).ConfigureAwait(false);
+
+        if (_history is not null)
+        {
+            await _history.RecordAsync(report, started, telemetry?.Samples ?? [], _environment.FFmpegPath, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (report.Planned is { IsSkipped: false, Plan: { } plan })
+        {
+            _reserved.Add(Path.GetFullPath(plan.FinalOutputPath));
+        }
+
+        _reporter.Completed(report, DryRun, _environment.FFmpegPath);
+        return report;
+    }
+
+    private async Task<JobReport> ConcatAsync(string label, ConcatJob job, IProgress<JobProgress> progress, CancellationToken cancellationToken)
+    {
+        var outcome = await ConcatOrchestrator.RunAsync(job, _environment, progress, cancellationToken).ConfigureAwait(false);
+        return new JobReport(label, job.ToEncodingJob(), outcome.Result, outcome.Planned, outcome.Strategy);
+    }
+
+    private async Task<JobReport> PlanConcatAsync(string label, ConcatJob job, CancellationToken cancellationToken)
+    {
+        var encodingJob = job.ToEncodingJob();
+        var (planned, strategy, _, warnings) = await ConcatOrchestrator.PlanAsync(job, _environment, cancellationToken).ConfigureAwait(false);
+        if (!planned.IsSuccess)
+        {
+            return new JobReport(label, encodingJob, JobResult.Failed(job.OutputPath, planned.Failure, warnings), null, strategy);
+        }
+
+        var plan = planned.Value;
+        var result = plan.IsSkipped
+            ? JobResult.Skipped(plan.OutputPath, plan.SkipReason, [.. warnings, .. plan.Warnings])
+            : JobResult.Succeeded(plan.OutputPath, [.. warnings, .. plan.Warnings]);
+
+        return new JobReport(label, encodingJob, result, plan, strategy);
     }
 }

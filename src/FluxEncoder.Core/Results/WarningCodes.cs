@@ -180,4 +180,9 @@ public static class WarningCodes
     /// Location and recording-device tags were removed from the output (TSKE011.6).
     /// </summary>
     public const string PrivateMetadataRemoved = "private-metadata-removed";
+
+    /// <summary>
+    /// Extra video, audio, or subtitle streams were left out because concatenation joins only the primary video and audio stream of each input (TSKE012.1).
+    /// </summary>
+    public const string ConcatExtraStreamsDropped = "concat-extra-streams-dropped";
 }

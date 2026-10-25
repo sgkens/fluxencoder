@@ -94,6 +94,13 @@ public static class ConcatPlanner
                     : $"'{Path.GetExtension(job.OutputPath)}' does not accept the input codecs, so they are re-encoded to H.264."));
         }
 
+        if (inputs.Any(i => i.Media.MotionVideoStreams.Count() > 1 || i.Media.AudioStreams.Count() > 1 || i.Media.SubtitleStreams.Any()))
+        {
+            warnings.Add(new JobWarning(
+                WarningCodes.ConcatExtraStreamsDropped,
+                "Concatenation joins only the first video and first audio stream of each input; extra video, audio, or subtitle streams were left out."));
+        }
+
         var encodingJob = job.ToEncodingJob();
         var total = durations.Aggregate(TimeSpan.Zero, (sum, d) => sum + d);
         var timeline = new InputTimeline.Finite(total);
@@ -143,11 +150,47 @@ public static class ConcatPlanner
             arguments = reencode.Arguments!;
         }
 
+        if (!job.KeepMetadata)
+        {
+            arguments.AddRange(["-map_metadata:g", "-1"]);
+        }
+        else if (!job.KeepPrivateMetadata)
+        {
+            var removed = inputs
+                .SelectMany(i => MetadataPrivacy.PrivateKeys(i.Media.Tags))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(k => k, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (removed.Count > 0)
+            {
+                foreach (var key in removed)
+                {
+                    arguments.AddRange(["-metadata:g", key + "="]);
+                }
+
+                warnings.Add(new JobWarning(
+                    WarningCodes.PrivateMetadataRemoved,
+                    $"Removed location and device tags ({string.Join(", ", removed)}); --keep-private-metadata keeps them."));
+            }
+        }
+
+        if (!job.KeepChapters || !profile.Chapters)
+        {
+            arguments.AddRange(["-map_chapters", "-1"]);
+            if (job.KeepChapters && !profile.Chapters && inputs.Any(i => i.Media.Chapters.Count > 0))
+            {
+                warnings.Add(new JobWarning(
+                    WarningCodes.ChaptersDropped,
+                    $"'{Path.GetExtension(job.OutputPath)}' cannot hold chapters."));
+            }
+        }
+
         if (profile.FastStart)
         {
             arguments.AddRange(["-movflags", "+faststart"]);
         }
 
+        arguments.AddRange(EncodePlanner.LimitArguments(context.Limits));
         arguments.AddRange(["-n", "-f", profile.Muxer, temporary]);
 
         var plan = new OutputPlan(encodingJob, [new FFmpegInvocation(arguments)])
@@ -156,6 +199,7 @@ public static class ConcatPlanner
             TemporaryOutputPath = temporary,
             ScratchDirectory = scratch,
             PreparedFiles = prepared,
+            MaxOutputBytes = context.Limits.MaxOutputBytes,
         };
 
         return Result<PlannedJob>.Success(PlannedJob.Run(plan, timeline, warnings));
@@ -197,6 +241,8 @@ public static class ConcatPlanner
                 Compare("pixel format", refVideo.PixelFormat, video.PixelFormat);
                 Compare("sample aspect ratio", refVideo.SampleAspectRatio, video.SampleAspectRatio);
                 Compare("frame rate", refVideo.AverageFrameRate, video.AverageFrameRate);
+                Compare("rotation", refVideo.Rotation ?? 0, video.Rotation ?? 0);
+                Compare("HDR format", refVideo.HdrFormats, video.HdrFormats);
             }
 
             if ((refAudio is null) != (audio is null))
@@ -208,6 +254,10 @@ public static class ConcatPlanner
                 Compare("audio codec", refAudio.CodecName, audio.CodecName);
                 Compare("sample rate", refAudio.SampleRate, audio.SampleRate);
                 Compare("channel count", refAudio.Channels, audio.Channels);
+                if (refAudio.ChannelLayout is not null && audio.ChannelLayout is not null)
+                {
+                    Compare("channel layout", refAudio.ChannelLayout, audio.ChannelLayout);
+                }
             }
         }
 

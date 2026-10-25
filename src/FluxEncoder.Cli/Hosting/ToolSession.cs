@@ -13,9 +13,23 @@ internal static class ToolSession
 {
     public static string ScratchRoot => Path.Combine(Path.GetTempPath(), "fluxencoder");
 
-    public static async Task<Result<EncodeEnvironment>> CreateAsync(string? ffmpeg, string? ffprobe, CancellationToken cancellationToken)
+    public static ToolDiscovery Locate(CliHost? host, ToolPathOverrides settingsTools, string? ffmpeg, string? ffprobe)
     {
-        var discovery = FFmpegLocator.Locate(new ToolPathOverrides(ffmpeg, ffprobe), ToolEnvironment.Current);
+        var overrides = new ToolPathOverrides(ffmpeg ?? settingsTools.FFmpeg, ffprobe ?? settingsTools.FFprobe);
+        var environment = host is null
+            ? ToolEnvironment.Current
+            : ToolEnvironment.Current with { GetVariable = name => host.GetVariable(name) ?? ToolEnvironment.Current.GetVariable(name) };
+        return FFmpegLocator.Locate(overrides, environment);
+    }
+
+    public static async Task<Result<EncodeEnvironment>> CreateAsync(
+        string? ffmpeg,
+        string? ffprobe,
+        CancellationToken cancellationToken,
+        ToolPathOverrides? settingsTools = null,
+        CliHost? host = null)
+    {
+        var discovery = Locate(host, settingsTools ?? ToolPathOverrides.None, ffmpeg, ffprobe);
         if (discovery.ToFailure() is { } missing)
         {
             return missing;

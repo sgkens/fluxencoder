@@ -69,6 +69,33 @@ public sealed class FFmpegLocatorTests
     }
 
     [Fact]
+    public void BundledSubdirectory_WinsOverPath()
+    {
+        var bundled = Path.Combine(AppDir, "ffmpeg");
+        var env = Fake([In(bundled, "ffmpeg"), In(bundled, "ffprobe"), In(PathDir, "ffmpeg"), In(PathDir, "ffprobe")]);
+
+        var result = FFmpegLocator.Locate(ToolPathOverrides.None, env);
+
+        Assert.Equal(new ToolLocation(FFmpegTool.FFmpeg, In(bundled, "ffmpeg"), ToolSource.ApplicationDirectory), result.FFmpeg);
+        Assert.Equal(In(bundled, "ffprobe"), result.FFprobe!.Path);
+    }
+
+    [Fact]
+    public void CustomOverride_WinsOverBundledSubdirectory()
+    {
+        var bundled = Path.Combine(AppDir, "ffmpeg");
+        var custom = Path.Combine(Root, "custom-ffmpeg-7.1");
+        var env = Fake(
+            [In(bundled, "ffmpeg"), In(bundled, "ffprobe"), In(custom, "ffmpeg"), In(custom, "ffprobe")],
+            new Dictionary<string, string> { [FFmpegLocator.FFmpegVariable] = custom });
+
+        var result = FFmpegLocator.Locate(ToolPathOverrides.None, env);
+
+        Assert.Equal(new ToolLocation(FFmpegTool.FFmpeg, In(custom, "ffmpeg"), ToolSource.EnvironmentVariable), result.FFmpeg);
+        Assert.Equal(In(custom, "ffprobe"), result.FFprobe!.Path);
+    }
+
+    [Fact]
     public void ConfiguredDirectory_ResolvesBothTools()
     {
         var custom = Path.Combine(Root, "custom");

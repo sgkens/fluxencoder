@@ -27,6 +27,7 @@ public static class CliApplication
         var root = new RootCommand("FluxEncoder: a terminal front end for FFmpeg encoding jobs.")
         {
             EncodeCommand.Build(host, session),
+            MergeCommand.Build(host, session),
             ConfigCommand.Build(host),
             HistoryCommand.Build(host),
             RemoteCommand.Build(host),

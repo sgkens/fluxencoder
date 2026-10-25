@@ -81,6 +81,21 @@ public static class FFmpegLocator
         return candidates.OfType<string>();
     }
 
+    /// <summary>
+    /// Directories shipped with FluxEncoder: the application root and its <c>ffmpeg/</c> bundle subdirectory.
+    /// </summary>
+    public static IEnumerable<string> ApplicationDirectories(ToolEnvironment environment)
+    {
+        ArgumentNullException.ThrowIfNull(environment);
+        if (string.IsNullOrWhiteSpace(environment.ApplicationDirectory))
+        {
+            yield break;
+        }
+
+        yield return environment.ApplicationDirectory;
+        yield return Path.Combine(environment.ApplicationDirectory, "ffmpeg");
+    }
+
     private sealed class Search(ToolEnvironment environment, ImmutableArray<string>.Builder searched, ImmutableArray<string>.Builder problems)
     {
         public ToolLocation? Find(FFmpegTool tool, string? configured, string variable, ToolLocation? sibling)
@@ -100,9 +115,12 @@ public static class FFmpegLocator
                 return nextToSibling;
             }
 
-            if (InDirectory(tool, environment.ApplicationDirectory, ToolSource.ApplicationDirectory) is { } bundled)
+            foreach (var appDir in ApplicationDirectories(environment))
             {
-                return bundled;
+                if (InDirectory(tool, appDir, ToolSource.ApplicationDirectory) is { } bundled)
+                {
+                    return bundled;
+                }
             }
 
             var separator = environment.Platform == HostPlatform.Windows ? ';' : ':';

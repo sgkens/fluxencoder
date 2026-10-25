@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using FluxEncoder.Core.Security;
+using FluxEncoder.Infrastructure.Tooling;
 
 namespace FluxEncoder.Infrastructure.Configuration;
 
@@ -16,6 +17,12 @@ public sealed record FluxSettings
     public const int SchemaVersion = 1;
 
     public static FluxSettings Default { get; } = new();
+
+    /// <summary>
+    /// Optional custom FFmpeg and FFprobe paths or directory override. Overrides bundled and <c>PATH</c> tools while
+    /// command-line <c>--ffmpeg</c>/<c>--ffprobe</c> flags still win.
+    /// </summary>
+    public ToolPathOverrides Tools { get; init; } = ToolPathOverrides.None;
 
     /// <summary>
     /// Defaults for <c>encode</c> options the user does not give.
@@ -49,6 +56,7 @@ public sealed record FluxSettings
 
     public bool Equals(FluxSettings? other) =>
         other is not null
+        && Tools == other.Tools
         && Encode.Count == other.Encode.Count && Encode.All(e => other.Encode.TryGetValue(e.Key, out var v) && v == e.Value)
         && Presets.Count == other.Presets.Count && Presets.All(p => other.Presets.TryGetValue(p.Key, out var v) && v == p.Value)
         && History == other.History
@@ -56,5 +64,5 @@ public sealed record FluxSettings
         && Limits == other.Limits
         && Remotes.Count == other.Remotes.Count && Remotes.All(r => other.Remotes.TryGetValue(r.Key, out var v) && v == r.Value);
 
-    public override int GetHashCode() => HashCode.Combine(Encode.Count, Presets.Count, History);
+    public override int GetHashCode() => HashCode.Combine(Tools, Encode.Count, Presets.Count, History);
 }

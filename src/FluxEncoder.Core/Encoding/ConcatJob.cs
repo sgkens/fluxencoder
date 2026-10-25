@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using FluxEncoder.Core.Hardware;
 
 namespace FluxEncoder.Core.Encoding;
 
@@ -53,6 +54,28 @@ public sealed record ConcatJob
         init => field = Enum.IsDefined(value) ? value : throw new ArgumentOutOfRangeException(nameof(value), value, null);
     } = ConcatMode.Auto;
 
+    public HardwareVendor? Hardware
+    {
+        get;
+        init
+        {
+            if (value is { } vendor && !Enum.IsDefined(vendor))
+            {
+                throw new ArgumentOutOfRangeException(nameof(value), vendor, null);
+            }
+
+            field = value;
+        }
+    }
+
+    public bool HardwareFallback { get; init; }
+
+    public bool KeepMetadata { get; init; } = true;
+
+    public bool KeepPrivateMetadata { get; init; }
+
+    public bool KeepChapters { get; init; } = true;
+
     public JobPolicy Policy
     {
         get;
@@ -70,9 +93,14 @@ public sealed record ConcatJob
         && Video == other.Video
         && Audio == other.Audio
         && Mode == other.Mode
+        && Hardware == other.Hardware
+        && HardwareFallback == other.HardwareFallback
+        && KeepMetadata == other.KeepMetadata
+        && KeepPrivateMetadata == other.KeepPrivateMetadata
+        && KeepChapters == other.KeepChapters
         && Policy == other.Policy;
 
-    public override int GetHashCode() => HashCode.Combine(Inputs.Length, OutputPath, Video, Audio, Mode);
+    public override int GetHashCode() => HashCode.Combine(Inputs.Length, OutputPath, Video, Audio, Mode, Hardware);
 
     /// <summary>
     /// The equivalent single-output job, which carries the output path and policies through execution.
@@ -83,6 +111,14 @@ public sealed record ConcatJob
         OutputPath = OutputPath,
         Video = Video,
         Audio = Audio,
+        Hardware = Hardware,
+        HardwareFallback = HardwareFallback,
+        Streams = new StreamSelection
+        {
+            Metadata = KeepMetadata,
+            PrivateMetadata = KeepPrivateMetadata,
+            Chapters = KeepChapters,
+        },
         Policy = Policy,
     };
 }

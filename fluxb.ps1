@@ -122,6 +122,12 @@ param(
     [string]$Hardware,
 
     [Parameter()]
+    [string]$FFmpegPath,
+
+    [Parameter()]
+    [string]$BundleFFmpegPath,
+
+    [Parameter()]
     [switch]$Ci,
 
     [Parameter()]
@@ -621,6 +627,12 @@ function Invoke-FluxBuild {
         [string]$Hardware,
 
         [Parameter()]
+        [string]$FFmpegPath,
+
+        [Parameter()]
+        [string]$BundleFFmpegPath,
+
+        [Parameter()]
         [switch]$Ci,
 
         [Parameter()]
@@ -693,6 +705,7 @@ function Invoke-FluxBuild {
     $subtitleParts = [System.Collections.Generic.List[string]]::new()
     $subtitleParts.Add("config=$Configuration")
     if ($null -ne $effectiveVersion) { $subtitleParts.Add("version=$effectiveVersion") }
+    if (-not [string]::IsNullOrWhiteSpace($FFmpegPath)) { $subtitleParts.Add("ffmpeg=$FFmpegPath") }
     if ($Ci.IsPresent) { $subtitleParts.Add('mode=CI') }
     Write-FluxBanner -Context $ctx -Title ('FluxEncoder Build (' + ($expandedTasks -join ' -> ') + ')') -Subtitle ($subtitleParts -join '  ')
 
@@ -830,6 +843,9 @@ function Invoke-FluxBuild {
                 if (-not [string]::IsNullOrWhiteSpace($Hardware)) {
                     $envMap['FLUXENCODER_HARDWARE'] = $Hardware
                 }
+                if (-not [string]::IsNullOrWhiteSpace($FFmpegPath)) {
+                    $envMap['FLUXENCODER_FFMPEG'] = [System.IO.Path]::GetFullPath($FFmpegPath)
+                }
 
                 try {
                     $res = Invoke-FluxDotNet -Context $ctx -StepName "Test ($Project)" -Arguments $testArgs.ToArray() -WorkingDirectory $repoRoot -EnvironmentOverrides $envMap
@@ -921,6 +937,21 @@ function Invoke-FluxBuild {
                 }
 
                 $res = Invoke-FluxDotNet -Context $ctx -StepName "Publish ($Runtime)" -Arguments $pubArgs.ToArray() -WorkingDirectory $repoRoot
+                if (-not [string]::IsNullOrWhiteSpace($BundleFFmpegPath)) {
+                    $resolvedBundleSrc = [System.IO.Path]::GetFullPath($BundleFFmpegPath)
+                    if (-not [System.IO.Directory]::Exists($resolvedBundleSrc)) {
+                        throw "BundleFFmpegPath directory not found at '$resolvedBundleSrc'."
+                    }
+                    $bundleDest = [System.IO.Path]::Combine($outDir, 'ffmpeg')
+                    [void][System.IO.Directory]::CreateDirectory($bundleDest)
+                    $copiedCount = 0
+                    foreach ($file in [System.IO.Directory]::GetFiles($resolvedBundleSrc)) {
+                        $destFile = [System.IO.Path]::Combine($bundleDest, [System.IO.Path]::GetFileName($file))
+                        [System.IO.File]::Copy($file, $destFile, $true)
+                        $copiedCount++
+                    }
+                    Write-FluxStep -Context $ctx -State 'Ok' -Label 'BundleFFmpeg' -Detail "Bundled $copiedCount file(s) into $bundleDest"
+                }
                 Write-FluxStep -Context $ctx -State 'Ok' -Label 'Artifact' -Detail $outDir
                 $results.Add($res)
             }
@@ -941,7 +972,11 @@ function Invoke-FluxBuild {
                         $runArgs.Add($arg)
                     }
                 }
-                $res = Invoke-FluxDotNet -Context $ctx -StepName 'Run' -Arguments $runArgs.ToArray() -WorkingDirectory $repoRoot
+                $runEnv = @{}
+                if (-not [string]::IsNullOrWhiteSpace($FFmpegPath)) {
+                    $runEnv['FLUXENCODER_FFMPEG'] = [System.IO.Path]::GetFullPath($FFmpegPath)
+                }
+                $res = Invoke-FluxDotNet -Context $ctx -StepName 'Run' -Arguments $runArgs.ToArray() -WorkingDirectory $repoRoot -EnvironmentOverrides $runEnv
                 $results.Add($res)
             }
         }

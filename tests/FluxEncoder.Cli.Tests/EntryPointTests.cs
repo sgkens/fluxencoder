@@ -63,7 +63,7 @@ public sealed class EntryPointTests
     {
         var root = CliApplication.BuildRootCommand();
 
-        Assert.Equal(["encode", "config", "history", "remote", "apply", "info"], root.Subcommands.Select(c => c.Name));
+        Assert.Equal(["encode", "merge", "config", "history", "remote", "apply", "info"], root.Subcommands.Select(c => c.Name));
         Assert.All(root.Subcommands, c => Assert.False(c.Hidden));
     }
 

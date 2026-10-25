@@ -1,0 +1,56 @@
+---
+layout: layouts/doc.njk
+title: "ADR 0001: Target Framework Policy"
+description: FluxEncoder targets .NET 10 (net10.0) only and builds with the .NET 10 SDK pinned in global.json.
+category: ARC-04 // ADR 0001
+sourcePath: docs/adr/0001-target-framework-policy.md
+tracker: TSKE001.1
+status: Accepted (2026-10-17)
+---
+{% from "components/callout.njk" import callout %}
+{% from "components/spec-table.njk" import specTable %}
+
+{{ callout({
+  kind: "important",
+  title: "DECISION SUMMARY",
+  body: "<p>FluxEncoder targets <strong>.NET 10 (<code>net10.0</code>)</strong> exclusively and builds with the .NET 10 SDK pinned in <code>global.json</code> (<code>" + generated.project.sdkVersion + "</code> with <code>rollForward: " + generated.project.sdkRollForward + "</code>).</p>"
+}) }}
+
+<h2>Context</h2>
+<p>
+  The initial integration snapshot mixed two incompatible framework targets:
+</p>
+<ul>
+  <li>The legacy prototype <code>CliApp/FluxEncoderCli.csproj</code> targeted <code>net8.0</code> with a hardcoded <code>win-x64</code> runtime identifier and did not compile (<code>CODE_AUDIT.md</code> A-02).</li>
+  <li>The concept sources and design references in <code>FluxEncoderEngine/</code> targeted .NET 10 with NativeAOT publishing.</li>
+</ul>
+<p>
+  Both the local development host and the pinned GitLab CI build image (<code>{{ generated.project.ciImage }}</code>) provide the .NET 10 SDK. Nothing in the architecture requires .NET 8 binary compatibility:
+</p>
+<ul>
+  <li><code>psm/FluxEncoder.psm1</code> invokes the published CLI executable as an out-of-process child command rather than loading FluxEncoder assemblies into the PowerShell AppDomain, so the PowerShell runtime version does not constrain FluxEncoder's target framework.</li>
+  <li>No external library consumers, binary plugins, or published NuGet libraries exist.</li>
+  <li>No target deployment environment restricted to a .NET 8-only runtime has been identified.</li>
+</ul>
+
+<h2>Decision</h2>
+
+{{ specTable({
+  caption: "ADR 0001 POLICY CLAUSES",
+  headers: ["Clause", "Specification"],
+  codeCols: [0],
+  rows: [
+    ["1. Single Target", "All production and test projects target <code>net10.0</code> (LTS, supported until November 2028). The value is declared once in <code>Directory.Build.props</code>."],
+    ["2. No Multi-Targeting", "<code>net8.0</code> is not multi-targeted. It will be added only if a concrete compatibility requirement is recorded in a new ADR that supersedes ADR 0001."],
+    ["3. SDK Pinning", "<code>global.json</code> pins the 10.0 SDK feature band with <code>rollForward: latestFeature</code>, allowing any 10.0.x SDK at or above <code>10.0.100</code> while preventing silent upgrades to a future major SDK."],
+    ["4. Publish-Time RIDs", "Normal builds do not hardcode a <code>RuntimeIdentifier</code>. Runtime identifiers and NativeAOT are publish-time choices configured per release artifact under <code>TSKE015.1</code>."],
+    ["5. Legacy Archive", "The legacy <code>CliApp</code> project is removed from the solution build and archived in <code>archive/legacy-cli/</code>."]
+  ]
+}) }}
+
+<h2>Consequences</h2>
+<ul>
+  <li><strong>Unified static analysis:</strong> Maintaining a single target framework yields one deterministic set of nullable reference, trimming, and AOT analyzer diagnostics without <code>#if NET8_0</code> conditional compilation branches.</li>
+  <li><strong>NativeAOT readiness:</strong> Choosing NativeAOT at publish time remains open across Windows, Linux, and macOS for both <code>x64</code> and <code>arm64</code> targets.</li>
+  <li><strong>Lifecycle review:</strong> This decision will be re-evaluated before .NET 10 reaches end of support in November 2028 to transition cleanly to the next LTS release.</li>
+</ul>

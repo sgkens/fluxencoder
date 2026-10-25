@@ -1,0 +1,29 @@
+{#
+  Component: callout
+  Purpose: Technical admonition block using geometric indicators (no emojis).
+  Parameters:
+    - kind: 'note' | 'important' | 'warning' | 'caution' | 'ffmpeg'
+    - title: Uppercase monospace header label
+    - body: HTML or text content
+#}
+{% macro callout(params = {}) %}
+  {% set kind = params.kind or 'note' %}
+  {% set glyph = '■' %}
+  {% if kind == 'important' or kind == 'ffmpeg' %}
+    {% set glyph = '◆' %}
+  {% elseif kind == 'warning' or kind == 'caution' %}
+    {% set glyph = '▲' %}
+  {% endif %}
+  {% set defaultTitle = kind | upper %}
+  {% set title = params.title or defaultTitle %}
+
+  <aside class="flux-callout flux-callout--{{ kind }}" data-component="callout" role="note">
+    <div class="flux-callout__header">
+      <span class="flux-callout__glyph" aria-hidden="true">{{ glyph }}</span>
+      <strong class="flux-callout__title">{{ title }}</strong>
+    </div>
+    <div class="flux-callout__body">
+      {{ params.body | safe }}
+    </div>
+  </aside>
+{% endmacro %}

@@ -1,0 +1,104 @@
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* Surface hierarchy: Broadcast Signal Rack */
+  --flux-bg-canvas: #07090d;
+  --flux-bg-surface: #0c1017;
+  --flux-bg-elevated: #111722;
+  --flux-bg-interactive: #172030;
+  --flux-bg-terminal: #06080b;
+  --flux-bg-glass: rgba(12, 16, 23, 0.88);
+
+  /* Text hierarchy */
+  --flux-text-primary: #edf2f7;
+  --flux-text-secondary: #9aa8bc;
+  --flux-text-muted: #64748b;
+  --flux-text-inverse: #07090d;
+
+  /* Flux Core Matrix Signal Accents */
+  --flux-accent-primary: #00ced1;
+  --flux-accent-primary-soft: rgba(0, 206, 209, 0.13);
+  --flux-accent-primary-border: rgba(0, 206, 209, 0.38);
+
+  --flux-signal-ok: #00e676;
+  --flux-signal-ok-soft: rgba(0, 230, 118, 0.12);
+  --flux-signal-warn: #fbbf24;
+  --flux-signal-warn-soft: rgba(251, 191, 36, 0.13);
+  --flux-signal-err: #f43f5e;
+  --flux-signal-err-soft: rgba(244, 63, 94, 0.13);
+  --flux-signal-ffmpeg: #38bdf8;
+  --flux-signal-ffmpeg-soft: rgba(56, 189, 248, 0.12);
+
+  /* Borders & Hairlines */
+  --flux-border-subtle: rgba(148, 163, 184, 0.13);
+  --flux-border-strong: rgba(148, 163, 184, 0.26);
+
+  /* Shadows */
+  --flux-shadow-panel: 0 14px 34px rgba(0, 0, 0, 0.55);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+
+  --flux-bg-canvas: #f8fafc;
+  --flux-bg-surface: #ffffff;
+  --flux-bg-elevated: #f1f5f9;
+  --flux-bg-interactive: #e2e8f0;
+  --flux-bg-terminal: #090d14;
+  --flux-bg-glass: rgba(255, 255, 255, 0.92);
+
+  --flux-text-primary: #0f172a;
+  --flux-text-secondary: #334155;
+  --flux-text-muted: #64748b;
+  --flux-text-inverse: #ffffff;
+
+  --flux-accent-primary: #008489;
+  --flux-accent-primary-soft: rgba(0, 132, 137, 0.1);
+  --flux-accent-primary-border: rgba(0, 132, 137, 0.35);
+
+  --flux-signal-ok: #059669;
+  --flux-signal-ok-soft: rgba(5, 150, 105, 0.1);
+  --flux-signal-warn: #b45309;
+  --flux-signal-warn-soft: rgba(180, 83, 9, 0.1);
+  --flux-signal-err: #be123c;
+  --flux-signal-err-soft: rgba(190, 18, 60, 0.1);
+  --flux-signal-ffmpeg: #0284c7;
+  --flux-signal-ffmpeg-soft: rgba(2, 132, 199, 0.1);
+
+  --flux-border-subtle: rgba(15, 23, 42, 0.11);
+  --flux-border-strong: rgba(15, 23, 42, 0.22);
+
+  --flux-shadow-panel: 0 12px 28px rgba(15, 23, 42, 0.1);
+}
+
+:root {
+  /* Typography */
+  --flux-font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --flux-font-mono: "JetBrains Mono", "Fira Code", "Cascadia Mono", Consolas, monospace;
+
+  /* Fluid Type Scale */
+  --flux-text-xs: 0.75rem;
+  --flux-text-sm: 0.845rem;
+  --flux-text-base: 0.965rem;
+  --flux-text-lg: clamp(1.05rem, 1rem + 0.25vw, 1.18rem);
+  --flux-text-xl: clamp(1.22rem, 1.1rem + 0.5vw, 1.45rem);
+  --flux-text-2xl: clamp(1.48rem, 1.28rem + 0.85vw, 1.9rem);
+  --flux-text-3xl: clamp(1.85rem, 1.5rem + 1.4vw, 2.55rem);
+
+  /* Layout Dimensions */
+  --flux-header-h: 3.5rem;
+  --flux-sidebar-w: 17.5rem;
+  --flux-toc-w: 16rem;
+  --flux-shell-max: 92rem;
+  --flux-prose-max: 76ch;
+
+  /* Spacing & Radius */
+  --flux-radius-sm: 3px;
+  --flux-radius-md: 6px;
+  --flux-radius-lg: 8px;
+}
+
+@view-transition {
+  navigation: auto;
+}

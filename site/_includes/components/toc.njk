@@ -1,0 +1,64 @@
+{#
+  Component: pageToc
+  Purpose: Right-rail sticky "On This Page" table of contents and document provenance card.
+  Parameters:
+    - headings: Array of `{ level, id, text }` extracted from the rendered page HTML
+    - sourcePath: Repository path to the authoritative markdown/source file
+    - tracker: Optional tracker task ID (e.g., `TSKE011.1`)
+    - status: Optional verification/document status label
+#}
+{% macro pageToc(params = {}) %}
+  {% set headings = params.headings or [] %}
+  {% set sourcePath = params.sourcePath %}
+  {% set tracker = params.tracker %}
+  {% set status = params.status or 'Verified Contract' %}
+
+  <aside class="flux-toc" data-component="page-toc" data-pagefind-ignore="all" aria-label="On this page">
+    <div class="flux-toc__inner">
+      <div class="flux-toc__meta-card">
+        <div class="flux-toc__meta-header">
+          <span class="flux-glyph" aria-hidden="true">◆</span>
+          <span>DOCUMENT PROVENANCE</span>
+        </div>
+        <dl class="flux-toc__meta-list">
+          {% if sourcePath %}
+            <div class="flux-toc__meta-row">
+              <dt>SOURCE</dt>
+              <dd><code>{{ sourcePath }}</code></dd>
+            </div>
+          {% endif %}
+          {% if tracker %}
+            <div class="flux-toc__meta-row">
+              <dt>TRACKER</dt>
+              <dd><code>{{ tracker }}</code></dd>
+            </div>
+          {% endif %}
+          <div class="flux-toc__meta-row">
+            <dt>STATE</dt>
+            <dd><span class="flux-status-dot" aria-hidden="true">■</span> {{ status }}</dd>
+          </div>
+        </dl>
+      </div>
+
+      {% if headings.length > 0 %}
+        <div class="flux-toc__section">
+          <h2 class="flux-toc__title">ON THIS PAGE</h2>
+          <nav class="flux-toc__nav" aria-label="Table of contents">
+            <ul class="flux-toc__list" data-toc-list>
+              {% for h in headings %}
+                <li class="flux-toc__item flux-toc__item--h{{ h.level }}">
+                  <a href="#{{ h.id }}" class="flux-toc__link" data-toc-link="{{ h.id }}">
+                    <span class="flux-toc__bullet" aria-hidden="true">
+                      {% if h.level == 2 %}■{% else %}─{% endif %}
+                    </span>
+                    <span class="flux-toc__text">{{ h.text }}</span>
+                  </a>
+                </li>
+              {% endfor %}
+            </ul>
+          </nav>
+        </div>
+      {% endif %}
+    </div>
+  </aside>
+{% endmacro %}

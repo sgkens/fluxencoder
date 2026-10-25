@@ -1,0 +1,68 @@
+{#
+  Component: terminalFrame & tuiPreview
+  Purpose:
+    1. `terminalFrame(params)`: Command-line execution block with stream label, exit code badge,
+       and copy-to-clipboard button.
+    2. `tuiPreview(params)`: Authentic 80-column Flux Core Matrix TUI telemetry frame matching
+       `archive/concept/fluxencoder_tui_preview.html` and `ui_design_analysis.md`.
+#}
+{% macro terminalFrame(params = {}) %}
+  {% set title = params.title or 'bash' %}
+  {% set stream = params.stream or 'stdin / stdout' %}
+  {% set exitCode = params.exitCode %}
+  {% set code = params.code or '' %}
+
+  <div class="flux-terminal" data-component="terminal-frame">
+    <div class="flux-terminal__bar" data-pagefind-ignore="all">
+      <div class="flux-terminal__controls" aria-hidden="true">
+        <span class="flux-terminal__dot flux-terminal__dot--red"></span>
+        <span class="flux-terminal__dot flux-terminal__dot--amber"></span>
+        <span class="flux-terminal__dot flux-terminal__dot--green"></span>
+      </div>
+      <div class="flux-terminal__title">{{ title }}</div>
+      <div class="flux-terminal__meta">
+        <span class="flux-terminal__stream">{{ stream }}</span>
+        {% if exitCode is defined %}
+          <span class="flux-terminal__exit {% if exitCode == 0 %}is-ok{% else %}is-err{% endif %}">
+            EXIT {{ exitCode }}
+          </span>
+        {% endif %}
+        <button type="button" class="flux-copy-btn" data-copy-code aria-label="Copy command to clipboard">
+          <span class="flux-glyph" aria-hidden="true">■</span>
+          <span data-copy-label>COPY</span>
+        </button>
+      </div>
+    </div>
+    <pre class="flux-terminal__body"><code>{{ code | trim }}</code></pre>
+  </div>
+{% endmacro %}
+
+{% macro tuiPreview(params = {}) %}
+  {% set command = params.command or 'flux encode --input raw_footage.mkv --hardware nvidia --codec hevc --quality balanced' %}
+  <figure class="flux-tui-matrix" data-component="tui-preview" aria-label="FluxEncoder 80-column terminal telemetry dashboard">
+    <div class="flux-tui-matrix__header" data-pagefind-ignore="all">
+      <div class="flux-terminal__controls" aria-hidden="true">
+        <span class="flux-terminal__dot flux-terminal__dot--red"></span>
+        <span class="flux-terminal__dot flux-terminal__dot--amber"></span>
+        <span class="flux-terminal__dot flux-terminal__dot--green"></span>
+      </div>
+      <span class="flux-tui-matrix__cmd">{{ command }}</span>
+      <span class="flux-tui-matrix__spec">80 COL │ UTF-8 │ NO EMOJI</span>
+    </div>
+    <div class="flux-tui-matrix__screen" role="img" aria-label="Terminal dashboard showing source raw_footage.mkv routed through Nvidia hardware to hevc_nvenc output with CPU 45%, RAM 210MB, BIT 6000k, SPD 2.4x, FPS 144, 0 dropped frames, sparkline, and 64.0% progress">
+<pre class="flux-tui-matrix__pre"><span class="t-dim">┌──────────────────────────────────────────────────────────────────────────────┐</span>
+<span class="t-dim">│</span>                               <span class="t-pri">FLUX CORE MATRIX</span>                               <span class="t-dim">│</span>
+<span class="t-dim">├──────────────────────────────────────────────────────────────────────────────┤</span>
+<span class="t-dim">│</span> <span class="t-sec">[SRC] raw_footage.mkv</span><span class="t-dim">  ──▶  </span><span class="t-pri">[HW] Nvidia</span><span class="t-dim">  ──▶  </span><span class="t-suc">[OUT] hevc_nvenc</span>               <span class="t-dim">│</span>
+<span class="t-dim">├──────────────────────────────────────────────────────────────────────────────┤</span>
+<span class="t-dim">│</span> <span class="t-dim">CPU [</span><span class="t-war">███████████</span><span class="t-dim">░░░░░░░░░░░░░░]</span> <span class="t-txt"> 45%</span>    <span class="t-dim">RAM [</span><span class="t-pri">█████</span><span class="t-dim">░░░░░░░░░░░░░░░░░░░]</span> <span class="t-txt">210MB</span> <span class="t-dim">│</span>
+<span class="t-dim">│</span> <span class="t-dim">BIT [</span><span class="t-pri">████████████████</span><span class="t-dim">░░░░░░░░░]</span> <span class="t-txt">6000k</span>  <span class="t-dim">SPD [</span><span class="t-war">█████████</span><span class="t-dim">░░░░░░░░░░░░░░░]</span> <span class="t-txt"> 2.4x</span> <span class="t-dim">│</span>
+<span class="t-dim">│</span>         <span class="t-sec">FPS: 144</span> <span class="t-dim">│</span> <span class="t-sec">DROPPED: 0</span> <span class="t-dim">│</span> <span class="t-sec">TIME: 00:01:45</span> <span class="t-dim">│</span> <span class="t-suc"> ▂▃</span><span class="t-war">▅▇</span><span class="t-err">█</span><span class="t-war">▇▅</span><span class="t-suc">▃▂</span>                  <span class="t-dim">│</span>
+<span class="t-dim">│</span> <span class="t-dim">PRG [</span><span class="t-suc">█████████████████████████████████████████</span><span class="t-dim">░░░░░░░░░░░░░░░░░░░░░░░]</span> <span class="t-pri"> 64.0%</span><span class="t-dim">│</span>
+<span class="t-dim">└──────────────────────────────────────────────────────────────────────────────┘</span></pre>
+    </div>
+    {% if params.caption %}
+      <figcaption class="flux-tui-matrix__caption">{{ params.caption }}</figcaption>
+    {% endif %}
+  </figure>
+{% endmacro %}

@@ -1,0 +1,80 @@
+{#
+  Component: docSidebar
+  Purpose: Left-rail hierarchical documentation navigation with domain codes, status badges,
+           and mobile drawer support.
+  Parameters:
+    - groups: Array of navigation group objects from `site.sidebar`
+    - currentUrl: Current page URL (from `page.url`)
+#}
+{% macro docSidebar(params = {}) %}
+  {% set groups = params.groups or [] %}
+  {% set currentUrl = params.currentUrl or '/' %}
+
+  <aside
+    id="flux-sidebar-drawer"
+    class="flux-sidebar"
+    data-component="doc-sidebar"
+    data-pagefind-ignore="all"
+    aria-label="Documentation tree"
+  >
+    <div class="flux-sidebar__header">
+      <span class="flux-sidebar__eyebrow">SIGNAL ROUTING TREE</span>
+      <button
+        type="button"
+        class="flux-icon-btn flux-sidebar__close"
+        data-drawer-close
+        aria-label="Close navigation drawer"
+      >
+        <span aria-hidden="true">✕</span>
+      </button>
+    </div>
+
+    <nav class="flux-sidebar__nav">
+      {% for section in groups %}
+        <div class="flux-sidebar__group">
+          <div class="flux-sidebar__group-header">
+            <span class="flux-sidebar__group-code">{{ section.code }}</span>
+            <span class="flux-sidebar__group-title">{{ section.group }}</span>
+          </div>
+          <ul class="flux-sidebar__list">
+            {% for item in section.items %}
+              {% set isCurrent = (currentUrl == item.url) %}
+              <li class="flux-sidebar__item">
+                <a
+                  href="{{ item.url }}"
+                  class="flux-sidebar__link{% if isCurrent %} is-active{% endif %}"
+                  {% if isCurrent %}aria-current="page"{% endif %}
+                >
+                  <span class="flux-sidebar__indicator" aria-hidden="true">
+                    {% if isCurrent %}▶{% else %}■{% endif %}
+                  </span>
+                  <span class="flux-sidebar__label">{{ item.title }}</span>
+                  {% if item.badge %}
+                    <span class="flux-sidebar__badge">{{ item.badge }}</span>
+                  {% endif %}
+                </a>
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endfor %}
+    </nav>
+
+    <div class="flux-sidebar__footer">
+      <div class="flux-sidebar__spec-box">
+        <div class="flux-sidebar__spec-row">
+          <span class="flux-sidebar__spec-key">ENGINE</span>
+          <span class="flux-sidebar__spec-val">FFmpeg / FFprobe</span>
+        </div>
+        <div class="flux-sidebar__spec-row">
+          <span class="flux-sidebar__spec-key">PARSER</span>
+          <span class="flux-sidebar__spec-val">System.CommandLine</span>
+        </div>
+        <div class="flux-sidebar__spec-row">
+          <span class="flux-sidebar__spec-key">STORAGE</span>
+          <span class="flux-sidebar__spec-val">SQLite WAL</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+{% endmacro %}

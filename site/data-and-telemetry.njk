@@ -1,0 +1,123 @@
+---
+layout: layouts/doc.njk
+title: Data, History & Telemetry
+description: Platform storage locations, settings.json schema, SQLite WAL concurrency, sample decimation, and telemetry metric definitions.
+category: OPS-03 // OPERATIONS & TRUST
+sourcePath: docs/data-and-telemetry.md
+tracker: DAT-E009
+status: Verified Contract
+---
+{% from "components/terminal.njk" import terminalFrame %}
+{% from "components/callout.njk" import callout %}
+{% from "components/spec-table.njk" import specTable %}
+
+<h2>Platform Storage Locations</h2>
+<p>
+  FluxEncoder stores a user configuration file (<code>settings.json</code>), a local SQLite run history database (<code>history.db</code>), and a probe/capability cache. Run <code>flux config path</code> to print the active resolved paths on the current machine.
+</p>
+
+{{ specTable({
+  caption: "PLATFORM-AWARE STORAGE PATHS (FluxPaths.cs)",
+  headers: ["Artifact", "Linux (XDG)", "macOS", "Windows"],
+  codeCols: [0, 1, 2, 3],
+  rows: [
+    ["settings.json", "~/.config/fluxencoder/", "~/Library/Application Support/FluxEncoder/", "%APPDATA%\\FluxEncoder\\"],
+    ["history.db", "~/.local/share/fluxencoder/", "~/Library/Application Support/FluxEncoder/", "%LOCALAPPDATA%\\FluxEncoder\\"],
+    ["cache", "~/.cache/fluxencoder/", "~/Library/Caches/FluxEncoder/", "%LOCALAPPDATA%\\FluxEncoder\\Cache\\"]
+  ]
+}) }}
+
+<ul>
+  <li><code>XDG_CONFIG_HOME</code>, <code>XDG_DATA_HOME</code>, and <code>XDG_CACHE_HOME</code> are honoured when they hold absolute paths.</li>
+  <li><code>FLUXENCODER_HOME</code> overrides all three with <code>config/</code>, <code>data/</code>, and <code>cache/</code> subdirectories under a single root for portable or service installations.</li>
+  <li>On Unix platforms, directories are created with mode <code>0700</code> and files with mode <code>0600</code>. On Windows, <code>history.db</code> is always placed in <code>%LOCALAPPDATA%</code> (never the roaming profile) because SQLite WAL files must not be synchronized across machines while open.</li>
+</ul>
+
+<h2>Configuration (<code>settings.json</code>)</h2>
+<p>
+  <code>settings.json</code> belongs to the user. FluxEncoder writes to it only through <code>flux config init</code>, using an atomic temporary-file swap and preserving any prior file as <code>settings.json.bak</code>. If <code>settings.json</code> contains invalid syntax, FluxEncoder emits a warning on <code>stderr</code>, leaves the file untouched, and continues with built-in defaults.
+</p>
+
+{{ terminalFrame({
+  title: "~/.config/fluxencoder/settings.json",
+  stream: "JSONC Configuration",
+  code: "// ~/.config/fluxencoder/settings.json
+{
+  \"schemaVersion\": 1,
+  \"encode\": { \"codec\": \"hevc\", \"quality\": \"balanced\" },
+  \"presets\": {
+    \"web\": { \"description\": \"MP4 for browsers\", \"codec\": \"h264\", \"audio-codec\": \"aac\", \"format\": \"mp4\" }
+  },
+  \"history\": { \"enabled\": true, \"telemetry\": true, \"retentionDays\": 90, \"maxRuns\": 1000 }
+}"
+}) }}
+
+<h2>Execution History & SQLite WAL Architecture</h2>
+<p>
+  Each completed <code>encode</code> run (excluding <code>--dry-run</code>) inserts one row into <code>runs</code> and its time-series samples into <code>samples</code> inside a single atomic transaction. Database write failures are reported once as warnings and never cause a completed media encode to fail.
+</p>
+
+<h3>Identifiers, Timestamps & Retention</h3>
+<ul>
+  <li><strong>UUIDv7 Identifiers:</strong> <code>runs.id</code> uses a time-ordered UUID version 7, ensuring chronological index locality and collision-free uniqueness across concurrent processes without coordination.</li>
+  <li><strong>Sortable UTC Timestamps:</strong> Timestamps are persisted as ISO 8601 UTC strings with 7 fractional digits (<code>2026-10-21T09:05:03.1234567Z</code>).</li>
+  <li><strong>Bounded Sample Decimation:</strong> At most <strong>1,800 samples</strong> are retained per run. Sampling begins at 1 Hz; whenever the 1,800-sample cap is reached, every second sample is evicted and the sampling period doubles. A 10-hour encode consumes the exact same database footprint as a 30-minute encode.</li>
+  <li><strong>Automatic Pruning:</strong> Runs older than <code>history.retentionDays</code> (default <code>90</code>) and runs exceeding <code>history.maxRuns</code> (default <code>1000</code>) are pruned automatically inside the recording transaction, cascading to their <code>samples</code>.</li>
+</ul>
+
+<h3>Concurrent Access & Corruption Recovery</h3>
+<ul>
+  <li>The database operates in <code>PRAGMA journal_mode = WAL</code> with a 5-second <code>busy_timeout</code> and <code>BEGIN IMMEDIATE</code> write transactions so multiple parallel FluxEncoder processes record safely.</li>
+  <li><code>PRAGMA user_version</code> tracks schema migrations. If a database was created by a newer schema version than the running executable supports, FluxEncoder opens it read-only and skips recording until upgraded.</li>
+  <li>If SQLite reports corruption (<code>SQLITE_CORRUPT</code> / <code>SQLITE_NOTADB</code>), FluxEncoder renames the database (and any <code>-wal</code>/<code>-shm</code> companions) to <code>history.db.corrupt-&lt;UTC-timestamp&gt;</code> and initializes a fresh database automatically.</li>
+</ul>
+
+{{ terminalFrame({
+  title: "bash — manual SQLite integrity verification",
+  stream: "stdout",
+  code: "sqlite3 ~/.local/share/fluxencoder/history.db 'PRAGMA integrity_check;'"
+}) }}
+
+<h2>Telemetry Metric Definitions</h2>
+<p>
+  Every telemetry sample is measured locally and stored only in <code>history.db</code>. Missing or unmeasurable values are stored as SQL <code>NULL</code>—never coerced to <code>0</code>.
+</p>
+
+{{ specTable({
+  caption: "TELEMETRY SAMPLE COLUMNS (samples table)",
+  headers: ["Column", "Definition", "Measurement Source"],
+  codeCols: [0],
+  rows: [
+    ["elapsed_seconds", "Wall-clock seconds elapsed since the FFmpeg process started.", "FluxEncoder monotonic stopwatch"],
+    ["processed_seconds", "Media output timestamp processed so far, in seconds.", "FFmpeg <code>out_time_us</code>"],
+    ["fps", "Encoded frames per wall-clock second.", "FFmpeg <code>fps</code>"],
+    ["speed", "Processing speed relative to real-time playback (<code>2.0</code> = 2x real time).", "FFmpeg <code>speed</code>"],
+    ["bitrate_kbps", "Average output stream bitrate so far, in kbit/s.", "FFmpeg <code>bitrate</code>"],
+    ["size_bytes", "Total output bytes written so far.", "FFmpeg <code>total_size</code>"],
+    ["cpu_percent", "FFmpeg process CPU time delta divided by wall time and logical core count (<code>0</code>–<code>100</code>).", "OS child-process CPU counters"],
+    ["memory_bytes", "FFmpeg resident working-set memory in bytes.", "OS child-process memory counters"],
+    ["dropped_frames", "Frames dropped by FFmpeg to maintain target output frame rate.", "FFmpeg <code>drop_frames</code>"]
+  ]
+}) }}
+
+{{ callout({
+  kind: "note",
+  title: "EXPLICITLY UNMEASURED METRICS",
+  body: "<p><strong>GPU utilization and GPU VRAM</strong> are intentionally omitted. Because there is no portable, unprivileged API to read per-process GPU load across NVIDIA, AMD, Intel, and Apple Silicon drivers, FluxEncoder refuses to fabricate or guess figures it cannot measure. Likewise, <code>cpu_percent</code> measures the child FFmpeg process alone and stays <code>NULL</code> on the initial sample (since CPU rate requires two readings).</p>"
+}) }}
+
+<h2>Deleting Stored Data</h2>
+
+{{ terminalFrame({
+  title: "bash — pruning or removing local history",
+  stream: "stdout",
+  exitCode: 0,
+  code: "# Delete all recorded runs and telemetry samples
+flux history clear
+
+# Delete runs older than 30 days
+flux history clear --older-than 30
+
+# Remove history database and cache directory completely (Linux)
+rm -rf ~/.local/share/fluxencoder ~/.cache/fluxencoder"
+}) }}

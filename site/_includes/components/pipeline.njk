@@ -1,0 +1,35 @@
+{#
+  Component: signalPipeline
+  Purpose: Visual signal-routing pipeline diagram illustrating how FluxEncoder wraps
+           FFprobe and FFmpeg with deterministic planning, argument isolation, and
+           atomic staging.
+  Parameters:
+    - title: Pipeline header title
+    - stages: Array of `{ step, tag, name, owner, detail }`
+#}
+{% macro signalPipeline(params = {}) %}
+  {% set title = params.title or 'DETERMINISTIC MEDIA EXECUTION PIPELINE' %}
+  {% set stages = params.stages or [] %}
+
+  <section class="flux-pipeline" data-component="signal-pipeline" aria-label="{{ title }}">
+    <div class="flux-pipeline__header">
+      <span class="flux-glyph" aria-hidden="true">◆</span>
+      <span class="flux-pipeline__title">{{ title }}</span>
+    </div>
+    <ol class="flux-pipeline__track">
+      {% for stage in stages %}
+        <li class="flux-pipeline__stage {% if stage.owner == 'FFmpeg' or stage.owner == 'FFprobe' %}is-ffmpeg{% endif %}">
+          <div class="flux-pipeline__stage-top">
+            <span class="flux-pipeline__step">{{ stage.step }}</span>
+            <span class="flux-pipeline__owner">{{ stage.owner }}</span>
+          </div>
+          <strong class="flux-pipeline__name">{{ stage.name }}</strong>
+          <p class="flux-pipeline__detail">{{ stage.detail }}</p>
+          {% if stage.tag %}
+            <code class="flux-pipeline__tag">{{ stage.tag }}</code>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ol>
+  </section>
+{% endmacro %}

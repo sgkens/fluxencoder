@@ -1,0 +1,319 @@
+{
+  "project": {
+    "name": "FluxEncoder",
+    "tagline": "Deterministic CLI workspace, planner, and telemetry layer for FFmpeg",
+    "repositoryUrl": "https://gitlab.com/sgkens/fluxencoder",
+    "targetFramework": "net10.0",
+    "analysisLevel": "latest",
+    "sdkVersion": "10.0.100",
+    "sdkRollForward": "latestFeature",
+    "testRunner": "Microsoft.Testing.Platform",
+    "ciImage": "sgkens/phellams-automator:10.0.400"
+  },
+  "packages": [
+    {
+      "name": "Spectre.Console",
+      "version": "0.57.2"
+    },
+    {
+      "name": "System.CommandLine",
+      "version": "2.0.12"
+    },
+    {
+      "name": "Microsoft.Data.Sqlite",
+      "version": "10.0.12"
+    },
+    {
+      "name": "YamlDotNet",
+      "version": "18.1.0"
+    },
+    {
+      "name": "xunit.v3",
+      "version": "4.0.1"
+    }
+  ],
+  "exitCodes": [
+    {
+      "name": "Success",
+      "code": 0,
+      "description": "The command completed without errors."
+    },
+    {
+      "name": "GeneralFailure",
+      "code": 1,
+      "description": "An unexpected internal error, or a batch whose items failed for different reasons."
+    },
+    {
+      "name": "InvalidUsage",
+      "code": 2,
+      "description": "Invalid command line or configuration. Nothing was attempted."
+    },
+    {
+      "name": "InputError",
+      "code": 3,
+      "description": "An input is missing, unreadable, unreachable, or not valid media."
+    },
+    {
+      "name": "OutputError",
+      "code": 4,
+      "description": "The output exists and the overwrite policy forbids replacing it, or it cannot be written."
+    },
+    {
+      "name": "DependencyMissing",
+      "code": 5,
+      "description": "FFmpeg or FFprobe could not be found or started."
+    },
+    {
+      "name": "Unsupported",
+      "code": 6,
+      "description": "The requested codec, container, hardware, or option combination is not available."
+    },
+    {
+      "name": "EncodeFailed",
+      "code": 7,
+      "description": "FFmpeg ran and failed."
+    },
+    {
+      "name": "OutputValidationFailed",
+      "code": 8,
+      "description": "FFmpeg reported success but the output did not pass validation."
+    },
+    {
+      "name": "Timeout",
+      "code": 9,
+      "description": "The operation exceeded the configured run-time limit or stalled."
+    },
+    {
+      "name": "PartialFailure",
+      "code": 10,
+      "description": "A batch where some items succeeded or were skipped and others failed."
+    },
+    {
+      "name": "Cancelled",
+      "code": 130,
+      "description": "Interrupted by SIGINT (Ctrl+C) or SIGTERM; FFmpeg was finalized gracefully and partial output was cleaned up."
+    }
+  ],
+  "fluxfileSchema": {
+    "id": "https://gitlab.com/sgkens/fluxencoder/-/raw/main/docs/schema/fluxfile-v1.schema.json",
+    "draft": "https://json-schema.org/draft/2020-12/schema",
+    "title": "Fluxfile, version 1",
+    "description": "Encode jobs for 'flux apply'. Job options are the 'encode' options without their dashes. Relative paths resolve against the Fluxfile's directory; ${NAME} is replaced from --var or FLUX_* environment variables.",
+    "topLevel": [
+      {
+        "key": "$schema",
+        "required": false,
+        "type": "string",
+        "description": "JSON Schema URI for editor validation and completion."
+      },
+      {
+        "key": "version",
+        "required": true,
+        "type": "const: 1",
+        "description": "Format version (must be 1)."
+      },
+      {
+        "key": "defaults",
+        "required": false,
+        "type": "optionProperties",
+        "description": "Encode options for every job; a job's own value wins."
+      },
+      {
+        "key": "jobs",
+        "required": true,
+        "type": "object",
+        "description": "Jobs by name, in file order. Names are case-insensitive."
+      }
+    ],
+    "jobProps": [
+      {
+        "key": "input",
+        "required": true,
+        "type": "textOrList",
+        "description": "Files, directories, URLs, remote:// paths, or \"@job\" for another job's outputs."
+      },
+      {
+        "key": "output",
+        "required": false,
+        "type": "text",
+        "description": "A file, or a directory ending in /. Must stay inside the Fluxfile's directory unless apply --allow-outside. Default: beside each input."
+      },
+      {
+        "key": "needs",
+        "required": false,
+        "type": "textOrList",
+        "description": "Jobs that must finish first. \"@job\" inputs add their job automatically."
+      },
+      {
+        "key": "preset",
+        "required": false,
+        "type": "text",
+        "description": "A preset from settings.json."
+      },
+      {
+        "key": "description",
+        "required": false,
+        "type": "string",
+        "description": "Free-text human description of the job."
+      }
+    ],
+    "optionProps": [
+      {
+        "key": "format",
+        "cliFlag": "--format",
+        "type": "text",
+        "description": "Container when FluxEncoder names the output: mkv, mp4, webm, mov, ts, mka, m4a, mp3, flac, opus, and others FFmpeg supports for those families."
+      },
+      {
+        "key": "codec",
+        "cliFlag": "--codec",
+        "type": "\"h264\" | \"hevc\" | \"av1\" | \"vvc\" | \"copy\"",
+        "description": "Encode option parameter."
+      },
+      {
+        "key": "quality",
+        "cliFlag": "--quality",
+        "type": "\"fast\" | \"balanced\" | \"high\"",
+        "description": "Encode option parameter."
+      },
+      {
+        "key": "video-bitrate",
+        "cliFlag": "--video-bitrate",
+        "type": "string | integer",
+        "description": "kbit/s (4000) or Mbit/s (4M)."
+      },
+      {
+        "key": "two-pass",
+        "cliFlag": "--two-pass",
+        "type": "flag",
+        "description": "Boolean flag (true or false)."
+      },
+      {
+        "key": "audio-codec",
+        "cliFlag": "--audio-codec",
+        "type": "\"copy\" | \"aac\" | \"opus\" | \"ac3\" | \"eac3\" | \"flac\" | \"mp3\"",
+        "description": "Encode option parameter."
+      },
+      {
+        "key": "audio-bitrate",
+        "cliFlag": "--audio-bitrate",
+        "type": "string | integer",
+        "description": "kbit/s (192) or with a unit (192k)."
+      },
+      {
+        "key": "video",
+        "cliFlag": "--video",
+        "type": "\"primary\" | \"all\" | \"none\"",
+        "description": "Encode option parameter."
+      },
+      {
+        "key": "audio",
+        "cliFlag": "--audio",
+        "type": "textOrList",
+        "description": "all, default, none, or languages in preference order."
+      },
+      {
+        "key": "subs",
+        "cliFlag": "--subs",
+        "type": "textOrList",
+        "description": "all, default, none, or languages."
+      },
+      {
+        "key": "no-chapters",
+        "cliFlag": "--no-chapters",
+        "type": "flag",
+        "description": "Boolean flag (true or false)."
+      },
+      {
+        "key": "no-metadata",
+        "cliFlag": "--no-metadata",
+        "type": "flag",
+        "description": "Boolean flag (true or false)."
+      },
+      {
+        "key": "keep-private-metadata",
+        "cliFlag": "--keep-private-metadata",
+        "type": "flag",
+        "description": "Boolean flag (true or false)."
+      },
+      {
+        "key": "no-cover",
+        "cliFlag": "--no-cover",
+        "type": "flag",
+        "description": "Boolean flag (true or false)."
+      },
+      {
+        "key": "no-attachments",
+        "cliFlag": "--no-attachments",
+        "type": "flag",
+        "description": "Boolean flag (true or false)."
+      },
+      {
+        "key": "keep-data",
+        "cliFlag": "--keep-data",
+        "type": "flag",
+        "description": "Boolean flag (true or false)."
+      },
+      {
+        "key": "start",
+        "cliFlag": "--start",
+        "type": "string | number",
+        "description": "90, 1:30, or 1h2m."
+      },
+      {
+        "key": "end",
+        "cliFlag": "--end",
+        "type": "string | number",
+        "description": "90, 1:30, or 1h2m."
+      },
+      {
+        "key": "duration",
+        "cliFlag": "--duration",
+        "type": "string | number",
+        "description": "90, 1:30, or 1h2m."
+      },
+      {
+        "key": "hardware",
+        "cliFlag": "--hardware",
+        "type": "\"auto\" | \"cpu\" | \"nvidia\" | \"amd\" | \"intel\" | \"apple\"",
+        "description": "Encode option parameter."
+      },
+      {
+        "key": "hardware-fallback",
+        "cliFlag": "--hardware-fallback",
+        "type": "flag",
+        "description": "Boolean flag (true or false)."
+      },
+      {
+        "key": "overwrite",
+        "cliFlag": "--overwrite",
+        "type": "flag",
+        "description": "Boolean flag (true or false)."
+      },
+      {
+        "key": "skip-existing",
+        "cliFlag": "--skip-existing",
+        "type": "flag",
+        "description": "Boolean flag (true or false)."
+      },
+      {
+        "key": "rename-existing",
+        "cliFlag": "--rename-existing",
+        "type": "flag",
+        "description": "Boolean flag (true or false)."
+      },
+      {
+        "key": "keep-partial",
+        "cliFlag": "--keep-partial",
+        "type": "flag",
+        "description": "Boolean flag (true or false)."
+      },
+      {
+        "key": "retries",
+        "cliFlag": "--retries",
+        "type": "integer | string",
+        "description": "Encode option parameter."
+      }
+    ]
+  }
+}

@@ -1,0 +1,50 @@
+{#
+  Component: searchModal
+  Purpose: Accessible `<dialog>` search modal backed by Pagefind static index (`/pagefind/pagefind.js`).
+#}
+{% macro searchModal(params = {}) %}
+  <dialog
+    id="flux-search-dialog"
+    class="flux-search-dialog"
+    data-component="search-modal"
+    data-pagefind-ignore="all"
+    aria-label="Search FluxEncoder documentation"
+  >
+    <div class="flux-search-dialog__panel">
+      <div class="flux-search-dialog__header">
+        <span class="flux-search-dialog__icon" aria-hidden="true">▶</span>
+        <label for="flux-search-input" class="flux-sr-only">Search documentation</label>
+        <input
+          id="flux-search-input"
+          type="search"
+          class="flux-search-dialog__input"
+          placeholder="Search commands, exit codes, Fluxfile keys, ADRs..."
+          autocomplete="off"
+          spellcheck="false"
+          data-search-input
+        />
+        <button
+          type="button"
+          class="flux-icon-btn flux-search-dialog__close"
+          data-search-close
+          aria-label="Close search dialog"
+        >
+          <kbd class="flux-kbd">ESC</kbd>
+        </button>
+      </div>
+
+      <div class="flux-search-dialog__body" data-search-results role="region" aria-live="polite">
+        <div class="flux-search-dialog__empty">
+          Type a query to search across CLI contracts, Fluxfile schema definitions, security boundaries, and ADRs.
+        </div>
+      </div>
+
+      <div class="flux-search-dialog__footer">
+        <span><kbd class="flux-kbd">↑</kbd> <kbd class="flux-kbd">↓</kbd> Navigate</span>
+        <span><kbd class="flux-kbd">↵</kbd> Open</span>
+        <span><kbd class="flux-kbd">ESC</kbd> Dismiss</span>
+        <span class="flux-search-dialog__engine">Indexed by Pagefind</span>
+      </div>
+    </div>
+  </dialog>
+{% endmacro %}

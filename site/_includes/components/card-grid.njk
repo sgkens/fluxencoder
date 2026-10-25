@@ -1,0 +1,45 @@
+{#
+  Component: cardGrid
+  Purpose: Technical module/architecture boundary grid cards with code tags,
+           tracker badges, and optional navigation links.
+  Parameters:
+    - columns: 2 | 3 (default 2)
+    - items: Array of `{ code, title, badge, body, url, meta }`
+#}
+{% macro cardGrid(params = {}) %}
+  {% set columns = params.columns or 2 %}
+  {% set items = params.items or [] %}
+
+  <div class="flux-card-grid flux-card-grid--cols-{{ columns }}" data-component="card-grid">
+    {% for item in items %}
+      <article class="flux-card">
+        <div class="flux-card__top">
+          {% if item.code %}
+            <span class="flux-card__code">{{ item.code }}</span>
+          {% endif %}
+          {% if item.badge %}
+            <span class="flux-card__badge">{{ item.badge }}</span>
+          {% endif %}
+        </div>
+        <h3 class="flux-card__title">
+          {% if item.url %}
+            <a href="{{ item.url }}" class="flux-card__link">
+              <span>{{ item.title }}</span>
+              <span class="flux-glyph" aria-hidden="true">▶</span>
+            </a>
+          {% else %}
+            {{ item.title }}
+          {% endif %}
+        </h3>
+        <div class="flux-card__body">
+          {{ item.body | safe }}
+        </div>
+        {% if item.meta %}
+          <div class="flux-card__meta">
+            <code>{{ item.meta }}</code>
+          </div>
+        {% endif %}
+      </article>
+    {% endfor %}
+  </div>
+{% endmacro %}

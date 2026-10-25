@@ -1,0 +1,195 @@
+---
+layout: layouts/base.njk
+title: Overview & Signal Architecture
+description: Deterministic command-line workspace, planner, and telemetry layer around FFmpeg and FFprobe.
+category: SYS-01 // FOUNDATION
+sourcePath: README.md
+tracker: SITE-E017
+status: Integration Baseline
+hidePageHeader: true
+---
+{% from "components/hero.njk" import signalHero %}
+{% from "components/terminal.njk" import terminalFrame, tuiPreview %}
+{% from "components/callout.njk" import callout %}
+{% from "components/spec-table.njk" import specTable %}
+{% from "components/card-grid.njk" import cardGrid %}
+{% from "components/pipeline.njk" import signalPipeline %}
+
+{{ signalHero({
+  eyebrow: "SYS-01 // DETERMINISTIC MEDIA WORKSPACE",
+  title: "FluxEncoder",
+  subtitle: "Precision CLI, Execution Planner & Telemetry Layer for FFmpeg",
+  lead: "FluxEncoder provides structured argument-list planning, hardware capability verification, tear-free terminal telemetry, declarative Fluxfile manifests, and bounded SQLite execution history around FFmpeg.",
+  primaryAction: { label: "GETTING STARTED & BUILD", url: "/getting-started/" },
+  secondaryAction: { label: "CLI & EXIT CODE CONTRACT", url: "/cli-reference/" },
+  stats: [
+    { label: "TARGET RUNTIME", value: generated.project.targetFramework, detail: "Single-target LTS policy pinned via global.json (ADR 0001)" },
+    { label: "PROCESS ISOLATION", value: "ArgumentList", detail: "Zero shell interpolation; protocol whitelists per input scheme" },
+    { label: "TELEMETRY CAP", value: "1,800 samples", detail: "Logarithmic interval decimation stored in SQLite WAL" }
+  ]
+}) }}
+
+{{ callout({
+  kind: "important",
+  title: "INTEGRATION BASELINE NOTICE",
+  body: "<p>Core domain planning (<code>FluxEncoder.Core</code>), FFmpeg/FFprobe process execution and SQLite WAL persistence (<code>FluxEncoder.Infrastructure</code>), and the <code>System.CommandLine</code> CLI surface (<code>FluxEncoder.Cli</code>) compile cleanly and pass automated unit and integration suites. Advanced workflows in <code>ADV-E012</code> and release packaging in <code>REL-E015</code> remain scheduled before public distribution.</p>"
+}) }}
+
+<h2>Why FluxEncoder Exists</h2>
+<p>
+  <a href="https://ffmpeg.org" target="_blank" rel="noopener noreferrer">FFmpeg</a> is one of the most foundational software tools in media engineering. Its command-line surface exposes hundreds of muxers, codecs, pixel formats, and filter graphs, while its raw standard error stream mixes banner diagnostics, stream mappings, and high-frequency progress counters.
+</p>
+<p>
+  FluxEncoder does not replace or obscure FFmpeg. Instead, it acts as a deterministic control and telemetry layer around FFmpeg and FFprobe:
+</p>
+
+{{ cardGrid({
+  columns: 2,
+  items: [
+    {
+      code: "PRB-E003",
+      badge: "FFprobe",
+      title: "Pre-Flight Media Inspection",
+      body: "Reads container format, video/audio/subtitle streams, HDR transfer characteristics, rotation matrices, and variable frame-rate deltas before constructing an encode plan.",
+      url: "/cli-reference/",
+      meta: "FluxEncoder.Infrastructure.Probing"
+    },
+    {
+      code: "RUN-E004",
+      badge: "FFmpeg",
+      title: "Deadlock-Safe Process Execution",
+      body: "Streams <code>-progress pipe:1</code> and <code>stderr</code> concurrently without buffer deadlocks, handles <code>SIGINT</code>/<code>SIGTERM</code> via graceful <code>q</code> finalization, and stages output atomically.",
+      url: "/security/",
+      meta: "FluxEncoder.Infrastructure.Execution"
+    },
+    {
+      code: "FMT-E011",
+      badge: "YAML / JSON",
+      title: "Declarative Fluxfile Pipelines",
+      body: "Executes dependency-ordered encoding graphs (<code>@job</code> outputs, <code>needs</code>, <code>FLUX_*</code> variables) validated against JSON Schema Draft 2020-12.",
+      url: "/fluxfile/",
+      meta: "docs/schema/fluxfile-v1.schema.json"
+    },
+    {
+      code: "DAT-E009",
+      badge: "SQLite WAL",
+      title: "Local History & Telemetry",
+      body: "Records UUIDv7 run identifiers, wall-clock speed, bitrate, and FFmpeg working-set memory in a local WAL database with automatic retention pruning.",
+      url: "/data-and-telemetry/",
+      meta: "FluxEncoder.Infrastructure.History"
+    }
+  ]
+}) }}
+
+<h2>Operational Pipeline</h2>
+<p>
+  Every encoding job follows a six-stage pipeline that separates media inspection and argument planning from child-process execution:
+</p>
+
+{{ signalPipeline({
+  title: "SIX-STAGE SIGNAL ROUTING PIPELINE",
+  stages: [
+    {
+      step: "STAGE 01",
+      owner: "FluxEncoder.Core",
+      name: "Resolve & Validate Inputs",
+      detail: "Expand files, directories, or remote:// aliases; enforce path and scheme policies before touching media.",
+      tag: "BatchPlanner / SourcePolicy"
+    },
+    {
+      step: "STAGE 02",
+      owner: "FFprobe",
+      name: "Probe Source Streams",
+      detail: "Inspect container, codecs, dimensions, duration, HDR metadata, and frame rate via FFprobe JSON output.",
+      tag: "FFprobeMediaProbe"
+    },
+    {
+      step: "STAGE 03",
+      owner: "FluxEncoder.Core",
+      name: "Verify Hardware & Plan Args",
+      detail: "Probe hardware encoders (NVENC, AMF, QSV, VideoToolbox) with a test encode and assemble ArgumentList tokens.",
+      tag: "EncodePlanBuilder"
+    },
+    {
+      step: "STAGE 04",
+      owner: "FluxEncoder.Cli",
+      name: "Confirm Execution Plan",
+      detail: "Present source-to-target stream mappings or emit structured dry-run JSON without modifying files.",
+      tag: "--dry-run / --json"
+    },
+    {
+      step: "STAGE 05",
+      owner: "FFmpeg",
+      name: "Execute & Sample Telemetry",
+      detail: "Write to a hidden .partial file beside the target while parsing -progress pipe:1 and process counters.",
+      tag: "FFmpegRunner"
+    },
+    {
+      step: "STAGE 06",
+      owner: "FluxEncoder.Infrastructure",
+      name: "Verify & Commit Output",
+      detail: "Validate non-empty output size, atomically promote .partial to final path, and commit run telemetry.",
+      tag: "SqliteHistoryStore"
+    }
+  ]
+}) }}
+
+<h2>Terminal Telemetry Architecture</h2>
+<p>
+  In interactive UTF-8 terminals, FluxEncoder renders a fixed-width dashboard using standard box-drawing characters (<code>┌</code>, <code>├</code>, <code>│</code>) and block glyphs (<code>█</code>, <code>░</code>). Column padding is calculated on visible grapheme width prior to wrapping strings in ANSI escape sequences so right-hand borders remain locked at column 80 regardless of encoder name length.
+</p>
+
+{{ tuiPreview({
+  command: "flux encode --input raw_footage.mkv --hardware nvidia --codec hevc --quality balanced",
+  caption: "Figure 1: Flux Core Matrix 80-column layout. Non-interactive sessions, pipes, and --json automatically bypass ANSI cursor movement."
+}) }}
+
+<h2>Architecture Boundaries</h2>
+<p>
+  The solution enforces strict dependency direction across three production projects and three corresponding xUnit v3 test projects:
+</p>
+
+{{ specTable({
+  caption: "SOLUTION ARCHITECTURE & RESPONSIBILITY MATRIX",
+  headers: ["Layer / Project", "Dependencies", "Primary Responsibilities"],
+  codeCols: [0],
+  rows: [
+    [
+      "src/FluxEncoder.Core",
+      "None (Pure .NET 10 domain)",
+      "Domain models, <code>EncodePlanBuilder</code>, hardware strategy contracts, <code>BatchPlanner</code>, output naming, URI translation, and multi-format report exporters."
+    ],
+    [
+      "src/FluxEncoder.Infrastructure",
+      "<code>FluxEncoder.Core</code>, <code>Microsoft.Data.Sqlite</code>, <code>YamlDotNet</code>",
+      "FFmpeg/FFprobe discovery and capability probing, deadlock-safe <code>FFmpegRunner</code>, OS credential store integration, Fluxfile event parser, and SQLite WAL history."
+    ],
+    [
+      "src/FluxEncoder.Cli",
+      "<code>FluxEncoder.Core</code>, <code>FluxEncoder.Infrastructure</code>, <code>System.CommandLine</code>, <code>Spectre.Console</code>",
+      "Composition root (<code>CliApplication</code>), command handlers (<code>encode</code>, <code>apply</code>, <code>info</code>, <code>config</code>, <code>history</code>, <code>remote</code>), POSIX signal handling, and terminal/JSON rendering."
+    ]
+  ]
+}) }}
+
+<h2>Subsystem Status Matrix</h2>
+<p>
+  Current verification state across the repository epics tracked in <code>devtracker-pending.md</code>:
+</p>
+
+{{ specTable({
+  caption: "SUBSYSTEM VERIFICATION STATUS",
+  headers: ["Subsystem", "Epic", "Status", "Notes"],
+  codeCols: [1],
+  rows: [
+    ["Solution & Target Framework", "ARC-E001", "Verified", "Single-target <code>net10.0</code> with central package management and locked restore."],
+    ["Domain & Planning Engine", "DOM-E002 / ENC-E005", "Verified", "Deterministic argument lists, stream mapping, HDR/rotation preservation, and atomic staging."],
+    ["FFprobe & FFmpeg Runner", "PRB-E003 / RUN-E004", "Verified", "Concurrent stdout/stderr draining, graceful <code>q</code> cancellation, and fake-child process test suite."],
+    ["Hardware Strategies", "HW-E006", "Verified", "NVIDIA NVENC, AMD AMF, Intel QSV, Apple VideoToolbox, and CPU fallback after test-encode verification."],
+    ["CLI & Terminal UI", "CLI-E007 / UI-E008", "Verified", "<code>encode</code>, <code>apply</code>, <code>info</code>, <code>config</code>, <code>history</code>, and <code>remote</code> registered with stable exit codes."],
+    ["Persistence & Security", "DAT-E009 / SEC-E010", "Verified", "SQLite WAL history, OS keyring integration, protocol whitelists, and secret redaction."],
+    ["Fluxfile & Exporters", "FMT-E011", "Verified", "YAML/JSON safe event parser, DAG ordering, JSON Schema 2020-12, and HTML/SVG/MD/YAML/JSON reports."],
+    ["Testing & GitLab CI", "TST-E013 / CI-E014", "Verified", "937 automated tests on Microsoft.Testing.Platform and multi-stage <code>.gitlab-ci.yml</code> pipeline."],
+    ["Advanced Workflows & Release", "ADV-E012 / REL-E015", "Scheduled", "<code>merge</code>, <code>audit</code>, two-pass orchestration, and signed release archives pending."]
+  ]
+}) }}

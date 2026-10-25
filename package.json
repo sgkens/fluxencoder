@@ -1,0 +1,17 @@
+{
+  "name": "fluxencoder-docs",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "11ty + Nunjucks documentation site for FluxEncoder",
+  "scripts": {
+    "docs:data": "node scripts/generate-docs-data.mjs",
+    "docs:css": "node scripts/compile-docs-scss.mjs",
+    "docs:eleventy": "npx --yes @11ty/eleventy --config=eleventy.config.js",
+    "docs:search": "node scripts/pagefind-index.mjs",
+    "docs:validate": "node scripts/validate-site.mjs",
+    "docs:responsive": "node scripts/benchmark/verify-responsive.mjs",
+    "docs:build": "npm run docs:data && npm run docs:css && npm run docs:eleventy && npm run docs:search && npm run docs:validate",
+    "docs:serve": "npm run docs:data && npm run docs:css && npx --yes @11ty/eleventy --config=eleventy.config.js --serve --port=4173"
+  }
+}

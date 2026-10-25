@@ -1,0 +1,161 @@
+---
+layout: layouts/doc.njk
+title: Getting Started & Build Guide
+description: Runtime prerequisites, .NET 10 SDK requirements, cross-platform bootstrap and build automation, and troubleshooting.
+category: SYS-01 // FOUNDATION
+sourcePath: README.md
+tracker: ARC-E001 / CI-E014
+status: Verified
+---
+{% from "components/terminal.njk" import terminalFrame %}
+{% from "components/callout.njk" import callout %}
+{% from "components/spec-table.njk" import specTable %}
+
+<h2>Runtime Requirements</h2>
+<p>
+  FluxEncoder operates as a native process orchestrator around FFmpeg and FFprobe on 64-bit Windows, Linux, and macOS systems:
+</p>
+
+{{ specTable({
+  caption: "RUNTIME & DEVELOPMENT PREREQUISITES",
+  headers: ["Dependency", "Requirement", "Verification Command"],
+  codeCols: [0, 2],
+  rows: [
+    ["FFmpeg", "Available on <code>PATH</code> (or specified via <code>--ffmpeg</code>) with required encoders.", "ffmpeg -version"],
+    ["FFprobe", "Available on <code>PATH</code> (or specified via <code>--ffprobe</code>) with JSON output support.", "ffprobe -version"],
+    [".NET SDK", "<code>" + generated.project.sdkVersion + "</code> or later 10.0 feature band (pinned in <code>global.json</code>).", "dotnet --version"],
+    ["PowerShell", "PowerShell 7.2+ (optional, for <code>bootstrap.ps1</code> and <code>fluxb.ps1</code> developer automation).", "pwsh --version"]
+  ]
+}) }}
+
+{{ callout({
+  kind: "ffmpeg",
+  title: "CODEC & HARDWARE AVAILABILITY",
+  body: "<p>Actual encoder availability always depends on the installed FFmpeg build and host hardware drivers. FluxEncoder probes <code>ffmpeg -codecs</code>, <code>-formats</code>, and <code>-hwaccels</code> and runs a short test encode before committing to a hardware encoder.</p>"
+}) }}
+
+<h2>Environment Bootstrap</h2>
+<p>
+  To verify or install prerequisites across Linux (<code>apt</code>, <code>dnf</code>, <code>pacman</code>, <code>apk</code>, <code>zypper</code>), macOS (<code>brew</code>), or Windows (<code>winget</code>, <code>scoop</code>, <code>choco</code>), use <code>bootstrap.ps1</code>:
+</p>
+
+{{ terminalFrame({
+  title: "pwsh — bootstrap verification & installation",
+  stream: "stdout",
+  exitCode: 0,
+  code: "# Check installed SDKs, FFmpeg/FFprobe capabilities, and SQLite without modifying the machine
+pwsh -NoProfile -File ./bootstrap.ps1 -CheckOnly
+
+# Install missing prerequisites (.NET 10 SDK, FFmpeg, SQLite)
+pwsh -NoProfile -File ./bootstrap.ps1"
+}) }}
+
+<h2>Building & Testing from Source</h2>
+<p>
+  FluxEncoder targets <code>{{ generated.project.targetFramework }}</code> exclusively (see <a href="/adr/0001-target-framework-policy/">ADR 0001</a>) and uses <code>{{ generated.project.testRunner }}</code> in <code>global.json</code>.
+</p>
+
+<h3>Standard .NET CLI Workflow</h3>
+
+{{ terminalFrame({
+  title: "bash — dotnet restore, build, and test",
+  stream: "stdout",
+  exitCode: 0,
+  code: "dotnet restore fluxencoder.sln --locked-mode
+dotnet format fluxencoder.sln --verify-no-changes --no-restore
+dotnet build fluxencoder.sln --configuration Release --no-restore
+dotnet test --solution fluxencoder.sln --configuration Release --no-build"
+}) }}
+
+<h3>Developer Build Runner (<code>fluxb.ps1</code>)</h3>
+<p>
+  The repository includes <code>fluxb.ps1</code> for single-command local and CI validation, including NuGet vulnerability auditing, formatting checks, test filtering, and test-artifact path/secret scrubbing:
+</p>
+
+{{ terminalFrame({
+  title: "pwsh — fluxb.ps1 tasks",
+  stream: "stdout",
+  exitCode: 0,
+  code: "# Default pipeline: Restore -> Build -> Test (Debug)
+./fluxb.ps1
+
+# Full CI verification pipeline (Release, locked restore, vulnerability audit, format check, scrubbed test reports)
+./fluxb.ps1 CI -Configuration Release -Ci -AutoVersion
+
+# Run a single test project or filter
+./fluxb.ps1 Test -Project Infrastructure -Filter '*FFmpegRunner*'
+
+# Publish self-contained or framework-dependent output to artifacts/publish/
+./fluxb.ps1 Publish -Configuration Release -Runtime linux-x64"
+}) }}
+
+<h3>Containerized Build (GitLab CI Image)</h3>
+<p>
+  Continuous integration in <code>.gitlab-ci.yml</code> pins <code>{{ generated.project.ciImage }}</code>, which includes the .NET 10 SDK, PowerShell 7, FFmpeg, FFprobe, and SQLite:
+</p>
+
+{{ terminalFrame({
+  title: "bash — container build",
+  stream: "stdout",
+  exitCode: 0,
+  code: "docker run --rm \\
+  --volume \"$PWD:/workspace\" \\
+  --workdir /workspace \\
+  " + generated.project.ciImage + " \\
+  pwsh -NoProfile -File ./fluxb.ps1 CI -Configuration Release -Ci"
+}) }}
+
+<h2>Repository Layout</h2>
+
+{{ terminalFrame({
+  title: "repository structure",
+  stream: "tree",
+  code: ".
+├── src/
+│   ├── FluxEncoder.Core/            Domain models, planning, contracts (zero I/O dependencies)
+│   ├── FluxEncoder.Infrastructure/  FFmpeg/FFprobe processes, file system, SQLite WAL, credentials
+│   └── FluxEncoder.Cli/             Composition root, System.CommandLine tree, terminal/JSON rendering
+├── tests/
+│   ├── FluxEncoder.Core.Tests/
+│   ├── FluxEncoder.Infrastructure.Tests/
+│   └── FluxEncoder.Cli.Tests/
+├── docs/                            Authoritative markdown specifications, ADRs, and JSON Schema
+├── site/                            11ty + Nunjucks component-first documentation site source
+├── scripts/                         Documentation data projection, CSS compiler, Pagefind, and validator
+├── tools/                           CI runtime, badge, and GitLab release package utilities
+├── bootstrap.ps1                    Cross-platform dependency installer and capability verifier
+├── fluxb.ps1                        Developer and CI build/test/audit/publish orchestrator
+├── .gitlab-ci.yml                   GitLab CI validation pipeline
+├── Directory.Build.props            Shared net10.0 target, deterministic build, and analyzer policy
+├── Directory.Packages.props         Central NuGet package version pins
+└── global.json                      .NET 10 SDK and Microsoft.Testing.Platform pin"
+}) }}
+
+<h2>Troubleshooting</h2>
+
+<h3>FFmpeg or FFprobe Not Found (Exit Code <code>5</code>)</h3>
+<p>
+  When FluxEncoder exits with code <code>5</code> (<code>DependencyMissing</code>), confirm both binaries are installed and reachable on <code>PATH</code>, or pass explicit binary paths via <code>--ffmpeg</code> and <code>--ffprobe</code>:
+</p>
+
+{{ terminalFrame({
+  title: "bash — verify FFmpeg installation",
+  stream: "stdout",
+  code: "ffmpeg -version
+ffprobe -version"
+}) }}
+
+<h3>Hardware Encoder Unavailable (Exit Code <code>6</code>)</h3>
+<p>
+  Hardware encoding requires both an FFmpeg build compiled with the vendor library (<code>hevc_nvenc</code>, <code>hevc_amf</code>, <code>hevc_qsv</code>, <code>hevc_videotoolbox</code>) and a working driver/device on the host. Inspect encoders exposed by the local FFmpeg binary:
+</p>
+
+{{ terminalFrame({
+  title: "bash — list FFmpeg encoders and hardware accelerators",
+  stream: "stdout",
+  code: "ffmpeg -hide_banner -encoders
+ffmpeg -hide_banner -hwaccels"
+}) }}
+<p>
+  Pass <code>--hardware auto</code> or <code>--hardware-fallback</code> to allow FluxEncoder to fall back to software encoding when the hardware test encode fails, or use <code>--hardware cpu</code> explicitly.
+</p>

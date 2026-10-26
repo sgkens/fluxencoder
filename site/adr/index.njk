@@ -33,6 +33,14 @@ status: Accepted
       body: "Commands are parsed with <code>System.CommandLine 2.0</code> for trimming/NativeAOT compatibility, rendered with <code>Spectre.Console</code>, and centrally pinned in <code>Directory.Packages.props</code> with committed lock files.",
       url: "/adr/0002-cli-framework-and-package-policy/",
       meta: "docs/adr/0002-cli-framework-and-package-policy.md (TSKE001.3)"
+    },
+    {
+      code: "ADR 0003",
+      badge: "ACCEPTED // 2026-10-26",
+      title: "Release Artifact Policy",
+      body: "Each supported RID gets a NativeAOT <code>flux</code> executable, with one framework-dependent portable build as the fallback. The trim and AOT analyzers run on every build.",
+      url: "/adr/0003-release-artifact-policy/",
+      meta: "docs/adr/0003-release-artifact-policy.md (TSKE015.1)"
     }
   ]
 }) }}

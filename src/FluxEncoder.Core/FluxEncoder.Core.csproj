@@ -1,3 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
+  <PropertyGroup>
+    <!-- Trim and NativeAOT analyzers run on every build: docs/adr/0003-release-artifact-policy.md -->
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
 </Project>

@@ -8,7 +8,7 @@ namespace FluxEncoder.Core.Tests.Architecture;
 /// </summary>
 public sealed class LayerDependencyTests
 {
-    private static readonly string[] OuterLayers = ["FluxEncoder.Infrastructure", "FluxEncoder.Cli"];
+    private static readonly string[] OuterLayers = ["FluxEncoder.Infrastructure", "flux"];
 
     [Fact]
     public void Core_DoesNotReferenceOuterLayers()

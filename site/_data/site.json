@@ -97,6 +97,12 @@
           "url": "/adr/0002-cli-framework-and-package-policy/",
           "badge": "ACCEPTED",
           "source": "docs/adr/0002-cli-framework-and-package-policy.md"
+        },
+        {
+          "title": "ADR 0003: Release Artifacts",
+          "url": "/adr/0003-release-artifact-policy/",
+          "badge": "ACCEPTED",
+          "source": "docs/adr/0003-release-artifact-policy.md"
         }
       ]
     }

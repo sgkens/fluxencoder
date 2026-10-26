@@ -170,7 +170,7 @@
       "fluxencoder.infrastructure": {
         "type": "Project",
         "dependencies": {
-          "FluxEncoder.Core": "[1.0.0, )",
+          "FluxEncoder.Core": "[0.1.0, )",
           "Microsoft.Data.Sqlite": "[10.0.12, )",
           "YamlDotNet": "[18.1.0, )"
         }

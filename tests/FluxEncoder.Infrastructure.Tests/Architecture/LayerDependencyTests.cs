@@ -11,6 +11,6 @@ public sealed class LayerDependencyTests
 
         Assert.DoesNotContain(
             infrastructure.GetReferencedAssemblies(),
-            a => string.Equals(a.Name, "FluxEncoder.Cli", StringComparison.Ordinal));
+            a => string.Equals(a.Name, "flux", StringComparison.Ordinal));
     }
 }

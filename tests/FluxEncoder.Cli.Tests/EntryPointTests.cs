@@ -8,7 +8,7 @@ public sealed class EntryPointTests
     [Fact]
     public void CliAssembly_HasEntryPoint()
     {
-        var cli = Assembly.Load(new AssemblyName("FluxEncoder.Cli"));
+        var cli = Assembly.Load(new AssemblyName("flux"));
 
         Assert.NotNull(cli.EntryPoint);
     }

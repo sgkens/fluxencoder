@@ -1,0 +1,74 @@
+---
+layout: layouts/doc.njk
+title: "ADR 0003: Release Artifact Policy"
+description: FluxEncoder ships one NativeAOT executable named flux per operating system and architecture, plus one framework-dependent portable build as a fallback.
+category: ARC-04 // ADR 0003
+sourcePath: docs/adr/0003-release-artifact-policy.md
+tracker: TSKE015.1
+status: Accepted (2026-10-26)
+---
+{% from "components/callout.njk" import callout %}
+{% from "components/spec-table.njk" import specTable %}
+
+{{ callout({
+  kind: "important",
+  title: "DECISION SUMMARY",
+  body: "<p>Each supported RID gets a <strong>NativeAOT</strong> build of the <code>flux</code> executable. One RID-neutral <strong>framework-dependent</strong> build is the fallback. Self-contained and single-file JIT builds are not published. The trim and AOT analyzers run on every build, so AOT-incompatible code fails the build instead of the release.</p>"
+}) }}
+
+<h2>Context</h2>
+<p>
+  <code>fluxb.ps1 Publish</code> could already produce four layouts, but none was designated as the release artifact, and nothing kept the code AOT-compatible between releases. A trial NativeAOT publish for <code>linux-x64</code> on 2026-10-26 found:
+</p>
+<ul>
+  <li>two trim/AOT warnings, both from the generic <code>JsonArray.Add&lt;T&gt;</code> in <code>MediaReport.ToJson</code>. With those fixed, the publish has no warnings even with warnings treated as errors;</li>
+  <li>no warnings from Spectre.Console, System.CommandLine, Microsoft.Data.Sqlite, or YamlDotNet (FluxEncoder uses only its event parser and emitter);</li>
+  <li>the same runtime behaviour as the JIT build for <code>info</code> in all six formats, <code>encode</code>, <code>--dry-run</code>, <code>merge</code>, <code>history</code>, <code>config</code>, <code>apply</code>, and SIGINT cancellation;</li>
+  <li>an 8.8 MB executable plus <code>libe_sqlite3.so</code> (1.5 MB), against roughly 70 MB for a self-contained JIT build;</li>
+  <li>a glibc floor of 2.34 for both the executable and the SQLite native library.</li>
+</ul>
+
+<h2>Decision</h2>
+
+{{ specTable({
+  caption: "ADR 0003 ARTIFACT CLAUSES",
+  headers: ["Area", "Policy Specification"],
+  codeCols: [0],
+  rows: [
+    ["1. Executable name", "The CLI assembly is named <code>flux</code> (<code>flux.exe</code> on Windows). Project, namespace, and test project names keep <code>FluxEncoder.Cli</code>."],
+    ["2. Release artifact", "NativeAOT per RID: <code>flux</code>, the SQLite native library beside it, and the licence files. Debug symbols go into a separate symbols archive."],
+    ["3. Fallback artifact", "One RID-neutral framework-dependent build (<code>fluxb.ps1 Publish -Portable</code>). It needs the .NET 10 runtime and runs with <code>dotnet flux.dll</code>."],
+    ["4. Not published", "Self-contained and single-file JIT builds stay available locally but are not release artifacts."],
+    ["5. Build-time enforcement", "<code>IsAotCompatible</code> on Core and Infrastructure and <code>PublishAot</code> on the CLI run the trim and AOT analyzers during every <code>dotnet build</code>."],
+    ["6. Locked restore per RID", "<code>src/Directory.Build.props</code> declares the release RIDs in <code>RuntimeIdentifiers</code>. Publishing restores with the project's own properties, then runs <code>dotnet publish --no-restore</code>."]
+  ]
+}) }}
+
+<h2>Support Matrix</h2>
+
+{{ specTable({
+  caption: "RELEASE RUNTIME IDENTIFIERS",
+  headers: ["RID", "Artifact", "Build host", "Status"],
+  codeCols: [0],
+  rows: [
+    ["linux-x64", "NativeAOT", "Linux x64 runner with clang", "Verified 2026-10-26"],
+    ["linux-arm64", "NativeAOT", "Linux arm64 runner, or x64 with an arm64 cross sysroot", "Planned"],
+    ["win-x64", "NativeAOT", "Windows runner with MSVC C++ build tools", "Planned"],
+    ["win-arm64", "NativeAOT", "Windows x64 runner with the MSVC arm64 tools", "Planned"],
+    ["osx-arm64", "NativeAOT", "macOS runner", "Gated with macOS CI"],
+    ["osx-x64", "NativeAOT", "macOS runner (cross-compile from arm64)", "Gated with macOS CI"],
+    ["any", "Framework-dependent", "Any", "Verified 2026-10-26"]
+  ]
+}) }}
+
+<p>
+  NativeAOT cannot cross-compile between operating systems, so each OS needs its own runner. Linux builds link against the build host's glibc; the current floor is glibc 2.34 (Debian 12, Ubuntu 22.04, RHEL 9).
+</p>
+
+<h2>Consequences</h2>
+<ul>
+  <li><strong>Reflection fails the build:</strong> reflection-based serialization, <code>Type.GetType</code> lookups, and dynamic code are rejected. Use the non-generic <code>JsonNode</code> APIs, <code>Utf8JsonWriter</code>, or System.Text.Json source generation instead.</li>
+  <li><strong>Package upgrades:</strong> a package version that introduces trim warnings cannot be adopted until those warnings are resolved or the package is replaced.</li>
+  <li><strong>New RIDs:</strong> add each new RID to <code>RuntimeIdentifiers</code> and regenerate the lock files with <code>dotnet restore --force-evaluate</code>.</li>
+  <li><strong>Follow-up tasks:</strong> <code>TSKE015.2</code> covers the automated AOT smoke test for each RID, <code>TSKE015.3</code> archive naming, checksums, signatures, and SBOMs, and <code>TSKE015.5</code> the licensing of FFmpeg-bundled archives.</li>
+</ul>

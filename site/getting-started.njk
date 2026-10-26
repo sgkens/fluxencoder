@@ -85,8 +85,11 @@ dotnet test --solution fluxencoder.sln --configuration Release --no-build"
 # Run a single test project or filter
 ./fluxb.ps1 Test -Project Infrastructure -Filter '*FFmpegRunner*'
 
-# Publish self-contained or framework-dependent output to artifacts/publish/
-./fluxb.ps1 Publish -Configuration Release -Runtime linux-x64"
+# Publish the NativeAOT release executable (flux) to artifacts/publish/linux-x64 (ADR 0003)
+./fluxb.ps1 Publish -Configuration Release -Runtime linux-x64 -Aot
+
+# Publish the framework-dependent portable fallback to artifacts/publish/portable
+./fluxb.ps1 Publish -Configuration Release -Portable"
 }) }}
 
 <h3>Containerized Build (GitLab CI Image)</h3>

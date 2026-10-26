@@ -30,6 +30,7 @@ const EXPECTED_PAGES = [
   'adr/index.html',
   'adr/0001-target-framework-policy/index.html',
   'adr/0002-cli-framework-and-package-policy/index.html',
+  'adr/0003-release-artifact-policy/index.html',
 ];
 
 const EXPECTED_ASSETS = [

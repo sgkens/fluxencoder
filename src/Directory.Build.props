@@ -1,0 +1,11 @@
+<Project>
+
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <!-- Every runtime identifier a release artifact is built for (docs/adr/0003-release-artifact-policy.md).
+       Declared so packages.lock.json records each RID and a locked-mode publish succeeds for any of them. -->
+  <PropertyGroup>
+    <RuntimeIdentifiers>linux-x64;linux-arm64;win-x64;win-arm64;osx-x64;osx-arm64</RuntimeIdentifiers>
+  </PropertyGroup>
+
+</Project>

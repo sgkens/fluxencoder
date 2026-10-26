@@ -2,6 +2,8 @@
   <PropertyGroup>
     <!-- Required by the source-generated P/Invoke (LibraryImport) for Windows Credential Manager. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- Trim and NativeAOT analyzers run on every build: docs/adr/0003-release-artifact-policy.md -->
+    <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
 
   <ItemGroup>

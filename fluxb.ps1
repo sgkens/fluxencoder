@@ -60,7 +60,13 @@
     Publish a single-file bundle during the 'Publish' task.
 
 .PARAMETER Aot
-    Publish with NativeAOT compilation (-p:PublishAot=true) during the 'Publish' task.
+    Publish a NativeAOT executable during the 'Publish' task. This is the release layout for every
+    supported RID (docs/adr/0003-release-artifact-policy.md); requires clang on Linux and the MSVC
+    C++ build tools on Windows.
+
+.PARAMETER Portable
+    Publish the framework-dependent, RID-neutral fallback (needs the .NET 10 runtime) during the
+    'Publish' task, into artifacts/publish/portable. Ignores -Runtime.
 
 .PARAMETER NoBuild
     Skip implicit build before 'Test' or 'Run' when outputs are already compiled.
@@ -80,8 +86,8 @@
     Builds and runs only the CLI test project in Debug configuration.
 
 .EXAMPLE
-    ./fluxb.ps1 Publish -Runtime linux-x64 -SelfContained -SingleFile -AutoVersion
-    Publishes a versioned self-contained single-file binary to artifacts/publish/linux-x64.
+    ./fluxb.ps1 Publish -Runtime linux-x64 -Aot -AutoVersion
+    Publishes the versioned NativeAOT release executable to artifacts/publish/linux-x64.
 
 .EXAMPLE
     ./fluxb.ps1 Doctor
@@ -141,6 +147,9 @@ param(
 
     [Parameter()]
     [switch]$Aot,
+
+    [Parameter()]
+    [switch]$Portable,
 
     [Parameter()]
     [switch]$NoBuild,
@@ -648,6 +657,9 @@ function Invoke-FluxBuild {
         [switch]$Aot,
 
         [Parameter()]
+        [switch]$Portable,
+
+        [Parameter()]
         [switch]$NoBuild,
 
         [Parameter()]
@@ -910,21 +922,40 @@ function Invoke-FluxBuild {
             }
 
             'Publish' {
-                $outDir = [System.IO.Path]::Combine($repoRoot, 'artifacts', 'publish', $Runtime)
+                if ($Portable.IsPresent -and ($Aot.IsPresent -or $SelfContained.IsPresent -or $SingleFile.IsPresent)) {
+                    throw "-Portable is framework-dependent and cannot be combined with -Aot, -SelfContained, or -SingleFile."
+                }
+
+                # Restore with the project's own properties, then publish without restoring. Passing -r, PublishAot,
+                # or Version to a restoring publish changes the RID set or package graph that packages.lock.json
+                # records, and locked-mode restore then fails (docs/adr/0003-release-artifact-policy.md).
+                $pubRestoreArgs = [System.Collections.Generic.List[string]]::new()
+                $pubRestoreArgs.Add('restore')
+                $pubRestoreArgs.Add($cliProj)
+                if ($Ci.IsPresent) {
+                    $pubRestoreArgs.Add('-p:ContinuousIntegrationBuild=true')
+                    $pubRestoreArgs.Add('--locked-mode')
+                }
+                $results.Add((Invoke-FluxDotNet -Context $ctx -StepName 'Restore (publish)' -Arguments $pubRestoreArgs.ToArray() -WorkingDirectory $repoRoot))
+
+                $layout = if ($Portable.IsPresent) { 'portable' } else { $Runtime }
+                $outDir = [System.IO.Path]::Combine($repoRoot, 'artifacts', 'publish', $layout)
                 $pubArgs = [System.Collections.Generic.List[string]]::new()
                 $pubArgs.Add('publish')
                 $pubArgs.Add($cliProj)
                 $pubArgs.Add('-c')
                 $pubArgs.Add($Configuration)
-                $pubArgs.Add('-r')
-                $pubArgs.Add($Runtime)
+                $pubArgs.Add('--no-restore')
+                if (-not $Portable.IsPresent) {
+                    $pubArgs.Add('-r')
+                    $pubArgs.Add($Runtime)
+                }
                 $pubArgs.Add('-o')
                 $pubArgs.Add($outDir)
 
-                if ($Aot.IsPresent) {
-                    $pubArgs.Add('-p:PublishAot=true')
-                }
-                else {
+                # PublishAot=true is the project default, so -Aot adds nothing and every other layout turns it off.
+                if (-not $Aot.IsPresent) {
+                    $pubArgs.Add('-p:PublishAot=false')
                     $scValue = if ($SelfContained.IsPresent -or $SingleFile.IsPresent) { 'true' } else { 'false' }
                     $pubArgs.Add("--self-contained=$scValue")
                     if ($SingleFile.IsPresent) {
@@ -936,7 +967,7 @@ function Invoke-FluxBuild {
                     $pubArgs.Add("-p:Version=$effectiveVersion")
                 }
 
-                $res = Invoke-FluxDotNet -Context $ctx -StepName "Publish ($Runtime)" -Arguments $pubArgs.ToArray() -WorkingDirectory $repoRoot
+                $res = Invoke-FluxDotNet -Context $ctx -StepName "Publish ($layout)" -Arguments $pubArgs.ToArray() -WorkingDirectory $repoRoot
                 if (-not [string]::IsNullOrWhiteSpace($BundleFFmpegPath)) {
                     $resolvedBundleSrc = [System.IO.Path]::GetFullPath($BundleFFmpegPath)
                     if (-not [System.IO.Directory]::Exists($resolvedBundleSrc)) {

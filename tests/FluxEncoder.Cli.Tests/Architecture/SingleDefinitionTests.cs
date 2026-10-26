@@ -9,7 +9,7 @@ namespace FluxEncoder.Cli.Tests.Architecture;
 public sealed class SingleDefinitionTests
 {
     private static readonly string[] ProductionAssemblies =
-        ["FluxEncoder.Core", "FluxEncoder.Infrastructure", "FluxEncoder.Cli"];
+        ["FluxEncoder.Core", "FluxEncoder.Infrastructure", "flux"];
 
     [Fact]
     public void PublicTypeNames_AreUniqueAcrossProductionAssemblies()
@@ -35,6 +35,6 @@ public sealed class SingleDefinitionTests
             .Select(assembly => assembly.GetName().Name)
             .ToList();
 
-        Assert.Equal(["FluxEncoder.Cli"], entryPoints);
+        Assert.Equal(["flux"], entryPoints);
     }
 }

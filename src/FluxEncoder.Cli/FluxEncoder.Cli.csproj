@@ -1,6 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <!-- Release artifacts are NativeAOT executables named flux: docs/adr/0003-release-artifact-policy.md.
+         PublishAot also enables the AOT analyzers on every build; pass -p:PublishAot=false for the
+         framework-dependent fallback. The project and namespaces keep the FluxEncoder.Cli name. -->
+    <AssemblyName>flux</AssemblyName>
+    <PublishAot>true</PublishAot>
   </PropertyGroup>
 
   <ItemGroup>

@@ -138,13 +138,14 @@ public sealed record MediaReport
                     break;
             }
 
-            streams.Add(node);
+            streams.Add((JsonNode)node);
         }
 
         var chapters = new JsonArray();
         foreach (var chapter in Media.Chapters)
         {
-            chapters.Add(new JsonObject
+            // The JsonNode overload: Add<T> is generic and needs reflection-based serialization under NativeAOT.
+            chapters.Add((JsonNode)new JsonObject
             {
                 ["start"] = Seconds(chapter.Start),
                 ["end"] = Seconds(chapter.End),
